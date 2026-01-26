@@ -10,7 +10,7 @@ from app.config import get_settings
 settings = get_settings()
 
 DATABASE_URL = (
-    f"mysql+pymysql://{settings.db_user}:{quote(settings.db_password)}"
+    f"mysql+pymysql://{settings.db_user}:{quote(settings.db_password, safe='')}"
     f"@{settings.db_host}:{settings.db_port}/{settings.db_name}"
 )
 
