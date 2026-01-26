@@ -11,7 +11,7 @@ from app.clients.makeup_api import MakeupApiClient
 from app.config import get_settings
 from app.services.ai_text import generate_text
 from app.services.user_signup_flow import _generate_natural_username
-from app.models import Post, Task, TaskLog, TaskStatus, TaskType, User, UserActivityLog
+from app.models import Task, TaskLog, TaskStatus, TaskType, User, UserActivityLog
 
 
 client = MakeupApiClient()
@@ -654,15 +654,6 @@ def _handle_post(session: Session, task: Task) -> None:
         raise ValueError("User missing token for post")
     _attach_user_to_task(session, task, user.id)
     resp = client.post_content(user.token, payload)
-    post = Post(
-        user_id=user.id,
-        content=payload.get("content", ""),
-        media_ref=payload.get("media_ref"),
-        status="sent",
-        sent_at=datetime.utcnow(),
-        api_resp=resp,
-    )
-    session.add(post)
     session.add(
         UserActivityLog(
             user_id=user.id,

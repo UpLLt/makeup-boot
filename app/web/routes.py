@@ -8,7 +8,7 @@ from fastapi.templating import Jinja2Templates
 from sqlmodel import Session, select
 
 from app.db import get_session, engine
-from app.models import Task, TaskStatus, TaskType, User, UserActivityLog, UserImage, Post, PostedMakeup, TaskLog
+from app.models import Task, TaskStatus, TaskType, User, UserActivityLog, UserImage, PostedMakeup, TaskLog
 import random
 from app.clients.cf_r2 import get_r2_client
 from app.services.task_generator import create_daily_tasks, create_configured_tasks
@@ -1046,8 +1046,7 @@ def delete_user(user_id: int, session: Session = Depends(get_db), admin_session 
     1. TaskLog (通过 task_id 删除相关的)
     2. Task (user_id)
     3. UserActivityLog (user_id)
-    4. Post (user_id)
-    5. PostedMakeup (user_id)
+    4. PostedMakeup (user_id)
     6. User (最后删除)
     """
     try:
@@ -1075,12 +1074,7 @@ def delete_user(user_id: int, session: Session = Depends(get_db), admin_session 
         for log in activity_logs:
             session.delete(log)
         
-        # 5. 删除该用户的所有 Post
-        posts = session.exec(select(Post).where(Post.user_id == user_id)).all()
-        for post in posts:
-            session.delete(post)
-        
-        # 6. 删除该用户的所有 PostedMakeup
+        # 5. 删除该用户的所有 PostedMakeup
         makeups = session.exec(select(PostedMakeup).where(PostedMakeup.user_id == user_id)).all()
         for makeup in makeups:
             session.delete(makeup)

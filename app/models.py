@@ -55,37 +55,9 @@ class User(SQLModel, table=True):
     password_hash: str
     password_plain: Optional[str] = Field(default=None)
     token: Optional[str] = Field(default=None)
-    makeup_preset_id: Optional[int] = Field(default=None, foreign_key="makeup_presets.id")
     status: str = Field(default="active")
     created_at: datetime = Field(default_factory=datetime.utcnow)
     last_login_at: Optional[datetime] = Field(default=None)
-
-
-class MakeupPreset(SQLModel, table=True):
-    """Makeup presets."""
-
-    __tablename__ = "makeup_presets"
-
-    id: Optional[int] = Field(default=None, primary_key=True)
-    name: str
-    meta: Optional[dict] = Field(sa_column=Column(JSON))
-    source: Optional[str] = Field(default=None)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-
-
-class Post(SQLModel, table=True):
-    """Post records."""
-
-    __tablename__ = "posts"
-
-    id: Optional[int] = Field(default=None, primary_key=True)
-    user_id: int = Field(foreign_key="users.id")
-    content: str
-    media_ref: Optional[str] = Field(default=None)
-    status: str = Field(default="pending")
-    sent_at: Optional[datetime] = Field(default=None)
-    api_resp: Optional[dict] = Field(default=None, sa_column=Column(JSON))
-    created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
 class Task(SQLModel, table=True):
