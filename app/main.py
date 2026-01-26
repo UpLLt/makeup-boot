@@ -1,4 +1,6 @@
 """FastAPI 入口."""
+import os
+from pathlib import Path
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
@@ -12,7 +14,10 @@ def create_app() -> FastAPI:
     app = FastAPI(title="Makeup Bot")
     init_db()
     app.include_router(web_router)
-    app.mount("/static", StaticFiles(directory="static"), name="static")
+    # 只在 static 目录存在时才挂载静态文件
+    static_dir = Path("static")
+    if static_dir.exists() and static_dir.is_dir():
+        app.mount("/static", StaticFiles(directory="static"), name="static")
     init_scheduler(app)
     return app
 
