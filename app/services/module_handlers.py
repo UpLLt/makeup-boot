@@ -26,6 +26,25 @@ client = MakeupApiClient()
 TOKEN_EXPIRED_CODES = {"10104", "401", "403"}
 
 
+def _filter_token_warnings(ws: list[str]) -> list[str]:
+    """
+    过滤“token 过期/鉴权失败”类告警。
+    
+    说明：模块采用多用户多次尝试策略时，早期尝试可能因为 10104 写入 warnings，
+    但后续尝试已成功。此时保留 10104 会造成“success=true 但 warnings 显示 Authorization error”的困惑。
+    """
+    filtered: list[str] = []
+    for w in ws:
+        w_str = str(w)
+        # 常见 token 过期/鉴权失败提示
+        if "code not success: 10104" in w_str:
+            continue
+        if "Authorization error" in w_str and "10104" in w_str:
+            continue
+        filtered.append(w_str)
+    return filtered
+
+
 def _is_token_expired(resp: Any) -> bool:
     """
     检查响应是否为 token 过期错误。
@@ -370,7 +389,7 @@ def _check_code(resp: Any, action: str, warnings: list[str], success_codes: tupl
 
 def _try_with_token_refresh(session: Session, func, *args, **kwargs) -> tuple[Any, Optional[str], Optional[int], list[str]]:
     """
-    尝试执行函数，如果token过期（401/403）则刷新token后重试。
+    尝试执行函数，如果token过期（401/403/10104）则刷新token后重试。
     
     Returns:
         (result, token, user_id, warnings)
@@ -386,12 +405,34 @@ def _try_with_token_refresh(session: Session, func, *args, **kwargs) -> tuple[An
     
     try:
         result = func(token, *args, **kwargs)
+        
+        # 检查响应中的错误码（API可能返回错误码而不是抛出异常）
+        if isinstance(result, dict) and _is_token_expired(result):
+            code = result.get("code", "")
+            print(f"[Token] Response indicates token expired (code={code}), refreshing for user {user_id}")
+            new_token, refresh_warnings = refresh_token(session, user_id)
+            warnings.extend(refresh_warnings)
+            if new_token:
+                try:
+                    result = func(new_token, *args, **kwargs)
+                    # 如果刷新后仍然返回token过期错误，返回None让调用者跳过该用户
+                    if isinstance(result, dict) and _is_token_expired(result):
+                        warnings.append(f"Token refreshed but still expired (code={result.get('code')}), skipping user {user_id}")
+                        return None, new_token, user_id, warnings
+                    return result, new_token, user_id, warnings
+                except Exception as retry_exc:
+                    warnings.append(f"Retry after token refresh failed: {retry_exc}")
+                    return None, new_token, user_id, warnings
+            else:
+                warnings.append(f"Failed to refresh token for user {user_id}, skipping")
+                return None, None, user_id, warnings
+        
         return result, token, user_id, warnings
     except Exception as exc:
         error_str = str(exc)
         # 检查是否是token过期错误
         if "401" in error_str or "403" in error_str or "unauthorized" in error_str.lower():
-            print(f"[Token] Token expired, refreshing for user {user_id}")
+            print(f"[Token] Token expired (exception), refreshing for user {user_id}")
             new_token, refresh_warnings = refresh_token(session, user_id)
             warnings.extend(refresh_warnings)
             if new_token:
@@ -482,10 +523,19 @@ def handle_face_upload(session: Session) -> Dict[str, Any]:
 
         return {"validate": validate_resp, "save": save_resp, "image_url": image_url}
     
-    result, token, user_id, token_warnings = _try_with_token_refresh(session, _face_validate_and_save)
-    warnings.extend(token_warnings)
-    
-    if result:
+    last_result = None
+    last_user_id: Optional[int] = None
+    # 尝试最多 10 个用户（get_valid_token 内部会随机取可用用户）
+    for attempt in range(1, 11):
+        result, token, user_id, token_warnings = _try_with_token_refresh(session, _face_validate_and_save)
+        warnings.extend(token_warnings)
+        last_result = result
+        last_user_id = user_id
+        
+        if not result:
+            warnings.append(f"face_upload attempt {attempt} no result (user_id={user_id})")
+            continue
+        
         validate_resp = result.get("validate") if isinstance(result, dict) else None
         save_resp = result.get("save") if isinstance(result, dict) else None
 
@@ -514,10 +564,10 @@ def handle_face_upload(session: Session) -> Dict[str, Any]:
             return {"success": True, "user_id": user_id, "result": result, "warnings": warnings}
 
         warnings.append(
-            f"face_upload failed: validate_ok={ok_validate} code={code_validate}, save_ok={ok_save} code={code_save}"
+            f"face_upload attempt {attempt} failed: validate_ok={ok_validate} code={code_validate}, save_ok={ok_save} code={code_save}, user_id={user_id}"
         )
     
-    return {"success": False, "user_id": user_id, "warnings": warnings, "result": result}
+    return {"success": False, "user_id": last_user_id, "warnings": warnings, "result": last_result}
 
 
 def handle_makeup_creation(session: Session) -> Dict[str, Any]:
@@ -1012,16 +1062,21 @@ def handle_like_collect(session: Session) -> Dict[str, Any]:
     warnings: list[str] = []
     success_codes = ("0", "200", "success")
     
-    token, user_id, token_warnings = get_valid_token(session)
-    warnings.extend(token_warnings)
+    last_result = None
+    last_user_id: Optional[int] = None
     
-    if not token:
-        return {"success": False, "warnings": warnings}
-    
-    # 创建可自动刷新 token 的 API 包装器
-    api = TokenRefreshableAPI(session, user_id, token, warnings)
-    
-    try:
+    # 尝试最多 10 个用户（get_valid_token 内部会随机取可用用户）
+    for attempt in range(1, 11):
+        token, user_id, token_warnings = get_valid_token(session)
+        warnings.extend(token_warnings)
+        
+        if not token:
+            warnings.append(f"like_collect attempt {attempt} no token available")
+            continue
+        
+        # 创建可自动刷新 token 的 API 包装器
+        api = TokenRefreshableAPI(session, user_id, token, warnings)
+
         def _safe_preview(obj: Any, max_len: int = 800) -> str:
             """生成安全的调试预览字符串（避免超长输出）."""
             try:
@@ -1070,9 +1125,8 @@ def handle_like_collect(session: Session) -> Dict[str, Any]:
         ok, code = _check_code(feed_resp, "get_community_feed", warnings, success_codes)
         
         if not ok:
-            return {
-                "success": False,
-                "warnings": warnings,
+            warnings.append(f"like_collect attempt {attempt} get_community_feed failed: code={code}, user_id={user_id}")
+            last_result = {
                 "error": {
                     "api": "/api/beauty/community/feed",
                     "method": "GET",
@@ -1082,6 +1136,8 @@ def handle_like_collect(session: Session) -> Dict[str, Any]:
                 },
                 "result": feed_resp,
             }
+            last_user_id = user_id
+            continue
         
         post_id: Optional[int] = None
         makeup_id: Optional[int] = None
@@ -1094,10 +1150,8 @@ def handle_like_collect(session: Session) -> Dict[str, Any]:
             data = feed_resp.get("data") or feed_resp
             items = data.get("list") or data.get("items") if isinstance(data, dict) else None
             if not isinstance(items, list) or not items:
-                warnings.append("Community feed list is empty or invalid")
-                return {
-                    "success": False,
-                    "warnings": warnings,
+                warnings.append(f"like_collect attempt {attempt} community feed list is empty or invalid, user_id={user_id}")
+                last_result = {
                     "error": {
                         "api": "/api/beauty/community/feed",
                         "method": "GET",
@@ -1106,6 +1160,8 @@ def handle_like_collect(session: Session) -> Dict[str, Any]:
                     },
                     "result": feed_resp,
                 }
+                last_user_id = user_id
+                continue
             if isinstance(items, list) and items:
                 print(f"[LikeCollect] Found {len(items)} posts")
                 
@@ -1145,24 +1201,9 @@ def handle_like_collect(session: Session) -> Dict[str, Any]:
                             print(f"[LikeCollect] post_detail response: {post_detail}")
                             ok, code = _check_code(post_detail, "get_post_detail", warnings, success_codes)
                             if not ok:
-                                return {
-                                    "success": False,
-                                    "warnings": warnings,
-                                    "error": {
-                                        "api": "/api/beauty/community/post",
-                                        "method": "GET",
-                                        "params": {"post_id": post_id},
-                                        "code": code,
-                                        "message": "get_post_detail failed",
-                                    },
-                                    "debug": {
-                                        "attempted_post_ids": attempted_post_ids,
-                                        "selected_item_keys": selected_item_keys,
-                                        "selected_item_preview": _safe_preview(selected_item),
-                                        "post_detail_preview": _safe_preview(post_detail),
-                                    },
-                                    "result": post_detail,
-                                }
+                                warnings.append(f"like_collect attempt {attempt} get_post_detail failed: code={code}, user_id={user_id}")
+                                # 继续尝试下一条动态，而不是直接返回
+                                continue
 
                             if isinstance(post_detail, dict):
                                 detail_data = post_detail.get("data") or post_detail
@@ -1179,14 +1220,14 @@ def handle_like_collect(session: Session) -> Dict[str, Any]:
                         post_id = attempted_post_ids[-1] if attempted_post_ids else None
                         makeup_id = None
                 else:
-                    warnings.append("No posts from other users found")
-                    return {"success": False, "warnings": warnings}
+                    warnings.append(f"like_collect attempt {attempt} no posts from other users found, user_id={user_id}")
+                    last_result = {"error": "No posts from other users found"}
+                    last_user_id = user_id
+                    continue
         
         if not post_id:
-            warnings.append("No post_id found in community feed items")
-            return {
-                "success": False,
-                "warnings": warnings,
+            warnings.append(f"like_collect attempt {attempt} no post_id found in community feed items, user_id={user_id}")
+            last_result = {
                 "error": {
                     "api": "/api/beauty/community/feed",
                     "method": "GET",
@@ -1199,14 +1240,14 @@ def handle_like_collect(session: Session) -> Dict[str, Any]:
                 },
                 "result": feed_resp,
             }
+            last_user_id = user_id
+            continue
         
         # 注意：上面已在选择阶段尝试从 post detail 获取 makeup_id，这里不再重复调用
         
         if not makeup_id:
-            warnings.append(f"No makeup_id found for post {post_id}")
-            return {
-                "success": False,
-                "warnings": warnings,
+            warnings.append(f"like_collect attempt {attempt} no makeup_id found for post {post_id}, user_id={user_id}")
+            last_result = {
                 "error": {
                     "api": "/api/beauty/community/post",
                     "method": "GET",
@@ -1220,6 +1261,8 @@ def handle_like_collect(session: Session) -> Dict[str, Any]:
                     "post_detail_preview": _safe_preview(post_detail),
                 },
             }
+            last_user_id = user_id
+            continue
         
         # 1. 检查是否已经点赞，如果没有则点赞（使用 post_id）
         print(f"[LikeCollect] Step 1: Checking like status for post {post_id}")
@@ -1479,29 +1522,22 @@ def handle_like_collect(session: Session) -> Dict[str, Any]:
             user_id=user_id,
             action="like_collect",
             api_endpoint="/api/beauty/community/post/like",
-            executed_at=datetime.utcnow(),
+            executed_at=beijing_now(),
             status="success",
             message=f"Liked makeup {makeup_id}",
         )
         session.add(log)
         session.commit()
-        
         return {"success": True, "user_id": user_id, "makeup_id": makeup_id, "warnings": warnings}
-    except Exception as exc:
-        warnings.append(f"Like collect failed: {exc}")
-        return {"success": False, "warnings": warnings}
+    
+    # 所有尝试都失败了
+    return {"success": False, "user_id": last_user_id, "warnings": warnings, "result": last_result}
 
 
 def handle_like_comment(session: Session) -> Dict[str, Any]:
     """6. 点赞评论模块。"""
     warnings: list[str] = []
     success_codes = ("0", "200", "success")
-
-    token, user_id, token_warnings = get_valid_token(session)
-    warnings.extend(token_warnings)
-
-    if not token:
-        return {"success": False, "warnings": warnings}
 
     def _is_already_liked(resp: Any) -> bool:
         """判断是否是“已点赞/重复点赞”类响应（需要忽略）。"""
@@ -1516,27 +1552,12 @@ def handle_like_comment(session: Session) -> Dict[str, Any]:
             return True
         return False
 
-    try:
+    def _like_comment_workflow(token: str):
+        """点赞评论的工作流程。"""
         # 1) 从社区动态里挑一个 post
         feed_params = {"page": 1, "size": 100}
         feed_resp = client.get_community_feed(token, feed_params)
-        ok, code = _check_code(feed_resp, "get_community_feed", warnings, success_codes)
         
-        # 如果失败，检查是否为 token 过期错误，如果是则刷新 token 并重试
-        if not ok and _is_token_expired(feed_resp):
-            print(f"[LikeComment] Token 过期 (code={code})，尝试刷新 token...")
-            new_token = _refresh_user_token(session, user_id, warnings)
-            if new_token:
-                token = new_token
-                print(f"[LikeComment] 使用新 token 重试 get_community_feed...")
-                feed_resp = client.get_community_feed(token, feed_params)
-                ok, code = _check_code(feed_resp, "get_community_feed (retry)", warnings, success_codes)
-            else:
-                print(f"[LikeComment] Token 刷新失败，无法重试")
-        
-        if not ok:
-            return {"success": False, "warnings": warnings, "result": feed_resp}
-
         post_id: Optional[int] = None
         if isinstance(feed_resp, dict):
             data = feed_resp.get("data") or feed_resp
@@ -1547,23 +1568,18 @@ def handle_like_comment(session: Session) -> Dict[str, Any]:
                     post_id = random_item.get("post_id") or random_item.get("id")
 
         if not post_id:
-            warnings.append("No post found for like_comment")
-            return {"success": False, "warnings": warnings}
+            return {"error": "No post found", "feed_resp": feed_resp}
 
         # 2) 拉评论列表，挑一条评论点赞
         comments_resp = client.comments(token, {"post_id": post_id, "page": 1, "size": 20})
-        ok, code = _check_code(comments_resp, "get_comments", warnings, success_codes)
-        if not ok:
-            return {"success": False, "warnings": warnings, "result": comments_resp}
-
+        
         comment_list = []
         if isinstance(comments_resp, dict):
             data = comments_resp.get("data") or comments_resp
             comment_list = data.get("list") or data.get("items") if isinstance(data, dict) else []
 
         if not isinstance(comment_list, list) or not comment_list:
-            warnings.append(f"No comments found for post {post_id}")
-            return {"success": False, "warnings": warnings, "post_id": post_id}
+            return {"error": f"No comments found for post {post_id}", "post_id": post_id}
 
         random_comment = random.choice(comment_list)
         comment_id = None
@@ -1571,62 +1587,97 @@ def handle_like_comment(session: Session) -> Dict[str, Any]:
             comment_id = random_comment.get("comment_id") or random_comment.get("id")
 
         if not comment_id:
-            warnings.append("No comment_id found in comment item")
-            return {"success": False, "warnings": warnings, "post_id": post_id}
+            return {"error": "No comment_id found", "post_id": post_id}
 
         like_resp = client.like_comment(token, {"comment_id": comment_id})
-        ok, code = _check_code(like_resp, "like_comment", warnings, success_codes)
         
-        # 如果失败，检查是否为 token 过期错误，如果是则刷新 token 并重试
-        if not ok and _is_token_expired(like_resp):
-            print(f"[LikeComment] Token 过期 (code={code})，尝试刷新 token...")
-            new_token = _refresh_user_token(session, user_id, warnings)
-            if new_token:
-                token = new_token
-                print(f"[LikeComment] 使用新 token 重试 like_comment...")
-                like_resp = client.like_comment(token, {"comment_id": comment_id})
-                ok, code = _check_code(like_resp, "like_comment (retry)", warnings, success_codes)
-            else:
-                print(f"[LikeComment] Token 刷新失败，无法重试")
+        return {
+            "feed_resp": feed_resp,
+            "comments_resp": comments_resp,
+            "like_resp": like_resp,
+            "post_id": post_id,
+            "comment_id": comment_id,
+        }
+
+    last_result = None
+    last_user_id: Optional[int] = None
+    # 尝试最多 10 个用户（get_valid_token 内部会随机取可用用户）
+    for attempt in range(1, 11):
+        result, token, user_id, token_warnings = _try_with_token_refresh(session, _like_comment_workflow)
+        warnings.extend(token_warnings)
+        last_result = result
+        last_user_id = user_id
         
-        if not ok and _is_already_liked(like_resp):
-            # 用户要求：已处理过则忽略
-            warnings.append("Already liked, skipping")
-            ok = True
+        if not result:
+            warnings.append(f"like_comment attempt {attempt} no result (user_id={user_id})")
+            continue
+        
+        if isinstance(result, dict) and "error" in result:
+            warnings.append(f"like_comment attempt {attempt} error: {result.get('error')}, user_id={user_id}")
+            continue
+        
+        feed_resp = result.get("feed_resp")
+        comments_resp = result.get("comments_resp")
+        like_resp = result.get("like_resp")
+        post_id = result.get("post_id")
+        comment_id = result.get("comment_id")
+        
+        # 检查各个步骤的响应
+        ok_feed, code_feed = _check_code(feed_resp, "get_community_feed", warnings, success_codes)
+        if not ok_feed:
+            warnings.append(f"like_comment attempt {attempt} feed failed: code={code_feed}, user_id={user_id}")
+            continue
+        
+        ok_comments, code_comments = _check_code(comments_resp, "get_comments", warnings, success_codes)
+        if not ok_comments:
+            warnings.append(f"like_comment attempt {attempt} comments failed: code={code_comments}, user_id={user_id}")
+            continue
+        
+        ok_like, code_like = _check_code(like_resp, "like_comment", warnings, success_codes)
+        
+        # 如果失败但是"已点赞"，视为成功
+        if not ok_like and _is_already_liked(like_resp):
+            warnings.append("Already liked, treating as success")
+            ok_like = True
 
-        if not ok:
-            return {"success": False, "warnings": warnings, "result": like_resp, "comment_id": comment_id, "post_id": post_id}
-
-        log = UserActivityLog(
-            user_id=user_id,
-            action="like_comment",
-            api_endpoint="/api/beauty/community/comment/like",
-            executed_at=datetime.utcnow(),
-            status="success",
-            message=f"Liked comment {comment_id}",
-        )
-        session.add(log)
-        session.commit()
-        return {"success": True, "user_id": user_id, "post_id": post_id, "comment_id": comment_id, "warnings": warnings}
-    except Exception as exc:
-        warnings.append(f"Like comment failed: {exc}")
-        return {"success": False, "warnings": warnings}
+        if ok_like:
+            log = UserActivityLog(
+                user_id=user_id,
+                action="like_comment",
+                api_endpoint="/api/beauty/community/comment/like",
+                executed_at=beijing_now(),
+                status="success",
+                message=f"Liked comment {comment_id}",
+            )
+            session.add(log)
+            session.commit()
+            return {
+                "success": True,
+                "user_id": user_id,
+                "post_id": post_id,
+                "comment_id": comment_id,
+                "warnings": _filter_token_warnings(warnings),
+            }
+        
+        warnings.append(f"like_comment attempt {attempt} failed: code={code_like}, user_id={user_id}")
+    
+    return {"success": False, "user_id": last_user_id, "warnings": warnings, "result": last_result}
 
 
 def handle_follow_user(session: Session) -> Dict[str, Any]:
     """7. 关注某个用户模块."""
     warnings: list[str] = []
     success_codes = ("0", "200", "success")
-    
+
     token, user_id, token_warnings = get_valid_token(session)
     warnings.extend(token_warnings)
-    
+
     if not token:
         return {"success": False, "warnings": warnings}
-    
+
     # 创建可自动刷新 token 的 API 包装器
     api = TokenRefreshableAPI(session, user_id, token, warnings)
-    
+
     try:
         def _safe_preview(obj: Any, max_len: int = 800) -> str:
             """生成安全的调试预览字符串（避免超长输出）."""
@@ -1719,11 +1770,23 @@ def handle_follow_user(session: Session) -> Dict[str, Any]:
             )
             session.add(log)
             session.commit()
-            return {"success": True, "user_id": user_id, "target_user_id": target_user_id, "warnings": warnings}
+            # 关注成功时，过滤掉 token 过期/鉴权失败类告警（例如 10104）
+            return {
+                "success": True,
+                "user_id": user_id,
+                "target_user_id": target_user_id,
+                "warnings": _filter_token_warnings(warnings),
+            }
         else:
             if _is_already_followed(follow_resp):
                 warnings.append("Already followed, skipping")
-                return {"success": True, "user_id": user_id, "target_user_id": target_user_id, "warnings": warnings, "result": follow_resp}
+                return {
+                    "success": True,
+                    "user_id": user_id,
+                    "target_user_id": target_user_id,
+                    "warnings": _filter_token_warnings(warnings),
+                    "result": follow_resp,
+                }
             return {"success": False, "warnings": warnings, "result": follow_resp, "debug": debug}
     except Exception as exc:
         warnings.append(f"Follow user failed: {exc}")
@@ -1861,7 +1924,13 @@ def handle_collect_topic(session: Session) -> Dict[str, Any]:
                     )
                     session.add(log)
                     session.commit()
-                    return {"success": True, "user_id": user_id, "topic_id": topic_id, "warnings": warnings}
+                    # 收藏成功时，过滤掉 token 过期/鉴权失败类告警（例如 10104）
+                    return {
+                        "success": True,
+                        "user_id": user_id,
+                        "topic_id": topic_id,
+                        "warnings": _filter_token_warnings(warnings),
+                    }
                 
                 # 检查是否是"已收藏"的错误
                 is_already = _is_already_collected_error(collect_resp, code)
@@ -1892,7 +1961,12 @@ def handle_collect_topic(session: Session) -> Dict[str, Any]:
                     )
                     session.add(log)
                     session.commit()
-                    return {"success": True, "user_id": user_id, "topic_id": last_topic_id, "warnings": warnings}
+                    return {
+                        "success": True,
+                        "user_id": user_id,
+                        "topic_id": last_topic_id,
+                        "warnings": _filter_token_warnings(warnings),
+                    }
                 
                 # 如果已经是最后一个账号，直接返回成功避免死循环
                 if attempt >= 3:
@@ -1907,7 +1981,12 @@ def handle_collect_topic(session: Session) -> Dict[str, Any]:
                     )
                     session.add(log)
                     session.commit()
-                    return {"success": True, "user_id": user_id, "topic_id": last_topic_id, "warnings": warnings}
+                    return {
+                        "success": True,
+                        "user_id": user_id,
+                        "topic_id": last_topic_id,
+                        "warnings": _filter_token_warnings(warnings),
+                    }
                 
                 # 如果尝试的话题数较少且不是最后一个账号，继续尝试下一个账号
                 print(f"[CollectTopic] Attempt {attempt}: Only tried {len(tried_topic_ids)} topics, continuing to next account")
@@ -1936,7 +2015,12 @@ def handle_collect_topic(session: Session) -> Dict[str, Any]:
         )
         session.add(log)
         session.commit()
-    result = {"success": True, "user_id": last_user_id, "topic_id": last_topic_id, "warnings": warnings}
+    result = {
+        "success": True,
+        "user_id": last_user_id,
+        "topic_id": last_topic_id,
+        "warnings": _filter_token_warnings(warnings),
+    }
     print(f"[CollectTopic] ====== END handle_collect_topic, returning: {result} ======")
     return result
 

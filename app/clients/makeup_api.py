@@ -124,6 +124,22 @@ class MakeupApiClient:
             error_text = resp.text[:500] if hasattr(resp, 'text') else str(exc)
             return {"code": "error", "message": f"Invalid JSON response: {error_text}"}
 
+    def refresh_token(self, token: str) -> Dict[str, Any]:
+        """
+        刷新token接口（使用旧token获取新token）。
+        
+        @param token - 当前token
+        @returns 包含新token的响应
+        """
+        headers = {"Token": token}
+        resp = self._request("POST", "/auth/refresh", headers=headers)
+        try:
+            return resp.json()
+        except Exception as exc:
+            # 如果响应不是JSON，返回错误信息
+            error_text = resp.text[:500] if hasattr(resp, 'text') else str(exc)
+            return {"code": "error", "message": f"Invalid JSON response: {error_text}"}
+
     def post_content(self, token: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         """发布动态."""
         headers = {"Token": token}

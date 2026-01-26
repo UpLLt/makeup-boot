@@ -79,7 +79,7 @@ def get_valid_token(session: Session, days: int = 7) -> Tuple[Optional[str], Opt
 
 def refresh_token(session: Session, user_id: int) -> Tuple[Optional[str], list[str]]:
     """
-    重新登录获取新token并更新数据库。
+    刷新token：优先使用通用token刷新接口，失败则重新登录。
     
     Returns:
         (token, warnings): 新token、警告列表
@@ -91,12 +91,72 @@ def refresh_token(session: Session, user_id: int) -> Tuple[Optional[str], list[s
         warnings.append(f"User {user_id} not found")
         return None, warnings
     
+    if not user.token:
+        warnings.append(f"User {user_id} has no token to refresh")
+        # 如果没有token，直接尝试重新登录
+        return _refresh_token_by_login(session, user, user_id, warnings)
+    
+    # 优先尝试使用通用token刷新接口
+    try:
+        print(f"[Token] 尝试使用通用token刷新接口刷新用户 {user_id} 的token...")
+        refresh_resp = client.refresh_token(user.token)
+        
+        # 检查响应是否成功
+        if isinstance(refresh_resp, dict):
+            code = str(refresh_resp.get("code", ""))
+            # 检查是否为成功响应
+            if code in ("0", "200", "success") or refresh_resp.get("token") or refresh_resp.get("access_token"):
+                # 提取新token
+                token = None
+                token = (
+                    refresh_resp.get("token")
+                    or refresh_resp.get("access_token")
+                    or refresh_resp.get("data", {}).get("token")
+                )
+                if not token and isinstance(refresh_resp.get("data"), dict):
+                    token = refresh_resp.get("data", {}).get("access_token")
+                
+                if token:
+                    # 更新数据库
+                    user.token = token
+                    session.add(user)
+                    session.commit()
+                    print(f"[Token] ✓ 使用刷新接口成功刷新用户 {user_id} 的token")
+                    return token, warnings
+                else:
+                    warnings.append(f"Refresh token response missing token: {refresh_resp}")
+            else:
+                # 刷新接口返回错误，记录警告但继续尝试登录
+                message = refresh_resp.get("message", "Unknown error")
+                warnings.append(f"Refresh token API failed (code={code}, message={message}), will try login")
+                print(f"[Token] ⚠️ 刷新接口失败 (code={code}), 回退到重新登录...")
+        else:
+            warnings.append(f"Refresh token response format invalid: {refresh_resp}")
+    except Exception as exc:
+        warnings.append(f"Refresh token API call failed: {exc}, will try login")
+        print(f"[Token] ⚠️ 刷新接口调用异常: {exc}, 回退到重新登录...")
+    
+    # 如果刷新接口失败，回退到重新登录
+    return _refresh_token_by_login(session, user, user_id, warnings)
+
+
+def _refresh_token_by_login(session: Session, user: User, user_id: int, warnings: list[str]) -> Tuple[Optional[str], list[str]]:
+    """
+    通过重新登录获取新token（刷新接口失败时的fallback）。
+    
+    @param session - 数据库会话
+    @param user - 用户对象
+    @param user_id - 用户ID
+    @param warnings - 警告列表
+    @returns (token, warnings): 新token、警告列表
+    """
     if not user.email or not user.password_plain:
         warnings.append(f"User {user_id} missing email or password")
         return None, warnings
     
     # 重新登录
     try:
+        print(f"[Token] 通过重新登录获取用户 {user_id} 的新token...")
         login_resp = client.login({
             "email": user.email,
             "password": user.password_plain,
@@ -115,7 +175,7 @@ def refresh_token(session: Session, user_id: int) -> Tuple[Optional[str], list[s
             user.token = token
             session.add(user)
             session.commit()
-            print(f"[Token] Refreshed token for user {user_id}")
+            print(f"[Token] ✓ 通过重新登录成功刷新用户 {user_id} 的token")
             return token, warnings
         else:
             warnings.append(f"Login response missing token: {login_resp}")
