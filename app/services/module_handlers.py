@@ -374,12 +374,31 @@ def _truncate_message(msg: str, max_length: int = 500) -> str:
     return msg[:max_length - 3] + "..."
 
 
-def _check_code(resp: Any, action: str, warnings: list[str], success_codes: tuple[str, ...] = ("0", "200", "success")) -> tuple[bool, Optional[str]]:
-    """检查 API 响应 code，如果不在成功列表中则添加警告并返回 False."""
+def _check_code(
+    resp: Any,
+    action: str,
+    warnings: list[str],
+    success_codes: tuple[str, ...] = ("0", "200", "success"),
+) -> tuple[bool, Optional[str]]:
+    """
+    检查 API 响应 code，如果不在成功列表中则添加警告并返回 False。
+    
+    特殊规则：
+    - 签到接口（action == "checkin"）返回 22201（Already checked in today）时，
+      视为“可接受的失败场景”，不加入 warnings，只返回 False 让上层继续尝试其他用户。
+    """
     code: Optional[str] = None
     if isinstance(resp, dict) and "code" in resp:
         code = str(resp.get("code"))
         if code not in success_codes:
+            # 已经签到的情况：不记入 warnings，避免在 UI 上造成“错误”错觉
+            if action == "checkin" and code == "22201":
+                print(
+                    f"[INFO] checkin already done for this user "
+                    f"(code={code}, message={resp.get('message', 'N/A')})"
+                )
+                return False, code
+            
             error_msg = f"[ERROR] {action} failed: code={code}, message={resp.get('message', 'N/A')}, resp={resp}"
             print(error_msg)
             warnings.append(f"{action} code not success: {code}, resp={resp}")
