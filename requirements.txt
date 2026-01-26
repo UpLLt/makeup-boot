@@ -1,0 +1,16 @@
+fastapi
+uvicorn[standard]
+sqlmodel
+SQLAlchemy
+pymysql
+httpx
+apscheduler
+python-dotenv
+jinja2
+passlib[bcrypt]
+bcrypt==4.1.2
+python-multipart
+pydantic-settings
+boto3
+
+

@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>管理员登录 - Makeup Bot Control Center</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    :root {
+      --bg-primary: #000000;
+      --bg-secondary: #0a0a0a;
+      --bg-card: #1a1a1a;
+      --text-primary: #ffffff;
+      --text-secondary: #a0a0a0;
+      --accent-cyan: #00ffff;
+      --accent-purple: #ff00ff;
+      --accent-green: #00ff00;
+      --accent-red: #ff0000;
+      --border-color: rgba(255, 255, 255, 0.1);
+      --shadow-glow: 0 0 20px rgba(0, 255, 255, 0.3);
+    }
+    
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    
+    .login-container {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 40px;
+      width: 100%;
+      max-width: 400px;
+      box-shadow: var(--shadow-glow);
+    }
+    
+    .login-title {
+      font-size: 24px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      text-align: center;
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    
+    .login-subtitle {
+      font-size: 14px;
+      color: var(--text-secondary);
+      text-align: center;
+      margin-bottom: 32px;
+    }
+    
+    .form-group {
+      margin-bottom: 20px;
+    }
+    
+    .form-label {
+      display: block;
+      font-size: 14px;
+      font-weight: 500;
+      margin-bottom: 8px;
+      color: var(--text-primary);
+    }
+    
+    .form-input {
+      width: 100%;
+      padding: 12px 16px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      color: var(--text-primary);
+      font-size: 14px;
+      transition: all 0.2s;
+    }
+    
+    .form-input:focus {
+      outline: none;
+      border-color: var(--accent-cyan);
+      box-shadow: 0 0 0 3px rgba(0, 255, 255, 0.1);
+    }
+    
+    .btn-login {
+      width: 100%;
+      padding: 12px 24px;
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+      color: #000;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-top: 8px;
+    }
+    
+    .btn-login:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 255, 255, 0.3);
+    }
+    
+    .btn-login:active {
+      transform: translateY(0);
+    }
+    
+    .btn-login:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+    
+    .error-message {
+      background: rgba(255, 0, 0, 0.1);
+      border: 1px solid var(--accent-red);
+      color: var(--accent-red);
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 14px;
+      margin-bottom: 20px;
+      display: none;
+    }
+    
+    .error-message.show {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <div class="login-container">
+    <h1 class="login-title">管理员登录</h1>
+    <p class="login-subtitle">Makeup Bot Control Center</p>
+    
+    <div class="error-message" id="error-message"></div>
+    
+    <form id="login-form" method="POST" action="/auth/login">
+      <div class="form-group">
+        <label class="form-label" for="username">用户名</label>
+        <input 
+          type="text" 
+          id="username" 
+          name="username" 
+          class="form-input" 
+          required 
+          autocomplete="username"
+        />
+      </div>
+      
+      <div class="form-group">
+        <label class="form-label" for="password">密码</label>
+        <input 
+          type="password" 
+          id="password" 
+          name="password" 
+          class="form-input" 
+          required 
+          autocomplete="current-password"
+        />
+      </div>
+      
+      <button type="submit" class="btn-login" id="login-btn">登录</button>
+    </form>
+  </div>
+
+  <script>
+    const loginForm = document.getElementById('login-form');
+    const errorMessage = document.getElementById('error-message');
+    const loginBtn = document.getElementById('login-btn');
+
+    // 不再检查 localStorage，因为现在使用 cookie 认证
+    // 如果用户已经登录（有有效的 cookie），服务器会自动处理
+    // 如果用户未登录，就让他们登录
+
+    loginForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const username = document.getElementById('username').value;
+      const password = document.getElementById('password').value;
+      
+      // 禁用按钮
+      loginBtn.disabled = true;
+      loginBtn.textContent = '登录中...';
+      errorMessage.classList.remove('show');
+      
+      try {
+        const formData = new FormData();
+        formData.append('username', username);
+        formData.append('password', password);
+        
+        console.log('Sending login request...');
+        
+        const response = await fetch('/auth/login', {
+          method: 'POST',
+          body: formData,
+        });
+        
+        console.log('Login response received. Status:', response.status);
+        console.log('Login response ok:', response.ok);
+        
+        // 检查响应类型
+        const contentType = response.headers.get('content-type') || '';
+        console.log('Response content-type:', contentType);
+        
+        if (response.ok && contentType.includes('application/json')) {
+          const data = await response.json();
+          console.log('Response data:', data);
+          
+          if (data.success) {
+            // 保存token到localStorage（用于API请求）
+            if (data.token) {
+              localStorage.setItem('admin_token', data.token);
+              console.log('Token saved to localStorage:', data.token.substring(0, 20) + '...');
+            }
+            
+            // Cookie已经由服务器设置，等待更长时间确保cookie生效
+            console.log('Login successful! Waiting for cookie to be set...');
+            
+            // 检查cookie是否已经设置
+            function checkCookieAndRedirect() {
+              const cookies = document.cookie.split(';');
+              const adminTokenCookie = cookies.find(c => c.trim().startsWith('admin_token='));
+              console.log('Cookies found:', cookies.length);
+              console.log('admin_token cookie:', adminTokenCookie ? 'Found' : 'Not found');
+              
+              if (adminTokenCookie || localStorage.getItem('admin_token')) {
+                console.log('Cookie/token found, redirecting to home page...');
+                window.location.href = '/';
+              } else {
+                console.log('Cookie not found yet, waiting...');
+                setTimeout(checkCookieAndRedirect, 100);
+              }
+            }
+            
+            // 立即检查一次，如果cookie已经设置就跳转，否则等待
+            setTimeout(checkCookieAndRedirect, 100);
+          } else {
+            // 显示错误信息
+            errorMessage.textContent = data.detail || data.message || '登录失败，请检查用户名和密码';
+            errorMessage.classList.add('show');
+            loginBtn.disabled = false;
+            loginBtn.textContent = '登录';
+          }
+        } else {
+          // 如果不是JSON或响应不成功
+          const text = await response.text();
+          console.log('Response text (first 200 chars):', text.substring(0, 200));
+          
+          if (response.status === 401) {
+            errorMessage.textContent = '登录失败：用户名或密码错误';
+            errorMessage.classList.add('show');
+            loginBtn.disabled = false;
+            loginBtn.textContent = '登录';
+          } else {
+            errorMessage.textContent = '登录失败：服务器错误 (状态码: ' + response.status + ')';
+            errorMessage.classList.add('show');
+            loginBtn.disabled = false;
+            loginBtn.textContent = '登录';
+          }
+        }
+      } catch (error) {
+        console.error('Login error:', error);
+        errorMessage.textContent = '登录失败：' + error.message;
+        errorMessage.classList.add('show');
+        loginBtn.disabled = false;
+        loginBtn.textContent = '登录';
+      }
+    });
+  </script>
+</body>
+</html>
+

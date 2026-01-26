@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>生成任务 - Makeup Bot</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    :root {
+      --bg-primary: #000000;
+      --bg-secondary: #0a0a0a;
+      --bg-card: #1a1a1a;
+      --text-primary: #ffffff;
+      --text-secondary: #a0a0a0;
+      --accent-cyan: #00ffff;
+      --accent-purple: #ff00ff;
+      --accent-green: #00ff00;
+      --accent-red: #ff0000;
+      --border-color: rgba(255, 255, 255, 0.1);
+      --shadow-glow: 0 0 20px rgba(0, 255, 255, 0.3);
+    }
+    
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+    
+    /* 顶部导航栏 */
+    .navbar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(0, 0, 0, 0.8);
+      backdrop-filter: blur(20px) saturate(180%);
+      border-bottom: 1px solid var(--border-color);
+      padding: 0 40px;
+      height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    
+    .navbar-brand {
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--text-primary);
+      text-decoration: none;
+      letter-spacing: -0.5px;
+    }
+    
+    .navbar-actions {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+    
+    .btn-back {
+      padding: 8px 16px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      color: var(--text-primary);
+      border-radius: 8px;
+      text-decoration: none;
+      font-size: 14px;
+      transition: all 0.2s;
+    }
+    
+    .btn-back:hover {
+      border-color: var(--accent-cyan);
+      background: rgba(0, 255, 255, 0.05);
+    }
+    
+    /* 主容器 */
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 60px 40px;
+    }
+    
+    /* 标题区域 */
+    .hero-section {
+      margin-bottom: 40px;
+    }
+    
+    .hero-title {
+      font-size: 40px;
+      font-weight: 700;
+      letter-spacing: -1.5px;
+      margin-bottom: 8px;
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    
+    .hero-subtitle {
+      font-size: 16px;
+      color: var(--text-secondary);
+      font-weight: 400;
+      margin-top: 8px;
+    }
+    
+    /* 提示信息 */
+    .info-box {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 30px;
+      color: var(--text-secondary);
+      font-size: 14px;
+    }
+    
+    /* 成功消息 */
+    .success-message {
+      background: rgba(0, 255, 0, 0.1);
+      border: 1px solid rgba(0, 255, 0, 0.3);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 30px;
+      color: var(--accent-green);
+    }
+    
+    .success-message b {
+      color: var(--accent-green);
+      font-size: 16px;
+    }
+    
+    .success-message p {
+      margin: 8px 0 0 0;
+      font-size: 14px;
+      opacity: 0.8;
+    }
+    
+    /* 错误消息 */
+    .error-message {
+      background: rgba(255, 0, 0, 0.1);
+      border: 1px solid rgba(255, 0, 0, 0.3);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 30px;
+      color: var(--accent-red);
+    }
+    
+    .error-message b {
+      color: var(--accent-red);
+      font-size: 16px;
+    }
+    
+    .error-message p {
+      margin: 8px 0 0 0;
+      font-size: 14px;
+      opacity: 0.8;
+    }
+    
+    /* 表格样式 */
+    .data-table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      overflow: hidden;
+      margin-bottom: 30px;
+    }
+    
+    .data-table thead {
+      background: rgba(255, 255, 255, 0.03);
+    }
+    
+    .data-table th {
+      padding: 16px 20px;
+      text-align: left;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 1px solid var(--border-color);
+    }
+    
+    .data-table td {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border-color);
+      color: var(--text-primary);
+      font-size: 14px;
+    }
+    
+    .data-table tbody tr:last-child td {
+      border-bottom: none;
+    }
+    
+    .data-table tbody tr:hover {
+      background: rgba(255, 255, 255, 0.02);
+    }
+    
+    .data-table code {
+      background: rgba(0, 255, 255, 0.1);
+      padding: 4px 8px;
+      border-radius: 4px;
+      color: var(--accent-cyan);
+      font-size: 12px;
+      font-family: 'Courier New', monospace;
+    }
+    
+    /* 输入框样式 */
+    input[type="number"],
+    input[type="date"] {
+      width: 120px;
+      padding: 10px 12px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      color: var(--text-primary);
+      font-size: 14px;
+      font-family: 'Inter', sans-serif;
+      transition: all 0.2s;
+    }
+    
+    input[type="number"]:focus,
+    input[type="date"]:focus {
+      outline: none;
+      border-color: var(--accent-cyan);
+      box-shadow: 0 0 0 3px rgba(0, 255, 255, 0.1);
+    }
+    
+    input[type="number"]::-webkit-inner-spin-button,
+    input[type="number"]::-webkit-outer-spin-button {
+      opacity: 1;
+    }
+    
+    /* 日期时间选择器容器 */
+    .datetime-selector {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 30px;
+    }
+    
+    .datetime-selector-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 20px;
+      letter-spacing: 0.3px;
+    }
+    
+    /* 日期范围选择 */
+    .date-range-group {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 16px;
+      align-items: end;
+      margin-bottom: 20px;
+    }
+    
+    .date-input-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    
+    .date-input-group label {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    input[type="date"],
+    input[type="time"] {
+      width: 100%;
+      padding: 12px 16px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      color: var(--text-primary);
+      font-size: 14px;
+      font-family: 'Inter', sans-serif;
+      transition: all 0.2s;
+      cursor: pointer;
+    }
+    
+    input[type="date"]:focus,
+    input[type="time"]:focus {
+      outline: none;
+      border-color: var(--accent-cyan);
+      box-shadow: 0 0 0 3px rgba(0, 255, 255, 0.1);
+    }
+    
+    input[type="date"]::-webkit-calendar-picker-indicator,
+    input[type="time"]::-webkit-calendar-picker-indicator {
+      filter: invert(1);
+      cursor: pointer;
+      opacity: 0.8;
+    }
+    
+    input[type="date"]::-webkit-calendar-picker-indicator:hover,
+    input[type="time"]::-webkit-calendar-picker-indicator:hover {
+      opacity: 1;
+    }
+    
+    .range-separator {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--accent-cyan);
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 28px;
+    }
+    
+    /* 时间范围选择 */
+    .time-range-group {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 16px;
+      align-items: end;
+    }
+    
+    .datetime-selector-hint {
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border-color);
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+    }
+    
+    /* 响应式 */
+    @media (max-width: 768px) {
+      .date-range-group,
+      .time-range-group {
+        grid-template-columns: 1fr;
+        gap: 16px;
+      }
+      
+      .range-separator {
+        margin: 8px 0;
+        transform: rotate(90deg);
+      }
+      
+      input[type="date"],
+      input[type="time"] {
+        width: 100%;
+      }
+    }
+    
+    /* 按钮样式 */
+    .btn-primary {
+      padding: 14px 28px;
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+      color: #000;
+      border: none;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s;
+      font-family: 'Inter', sans-serif;
+    }
+    
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-glow);
+    }
+    
+    .btn-secondary {
+      padding: 10px 20px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      color: var(--text-primary);
+      border-radius: 8px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: 'Inter', sans-serif;
+      text-decoration: none;
+      display: inline-block;
+    }
+    
+    .btn-secondary:hover {
+      border-color: var(--accent-cyan);
+      background: rgba(0, 255, 255, 0.05);
+    }
+    
+    .btn-ghost {
+      padding: 10px 20px;
+      background: transparent;
+      border: 1px solid var(--border-color);
+      color: var(--text-secondary);
+      border-radius: 8px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: 'Inter', sans-serif;
+    }
+    
+    .btn-ghost:hover {
+      border-color: var(--text-secondary);
+      color: var(--text-primary);
+    }
+    
+    /* 操作按钮组 */
+    .row-actions {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    
+    /* 滚动条 */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    
+    ::-webkit-scrollbar-track {
+      background: var(--bg-secondary);
+    }
+    
+    ::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 4px;
+    }
+    
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(255, 255, 255, 0.3);
+    }
+    
+    /* 响应式 */
+    @media (max-width: 768px) {
+      .container {
+        padding: 40px 20px;
+      }
+      
+      .hero-title {
+        font-size: 28px;
+      }
+      
+      .data-table {
+        font-size: 12px;
+      }
+      
+      .data-table th,
+      .data-table td {
+        padding: 12px 8px;
+      }
+      
+      input[type="number"] {
+        width: 100px;
+      }
+      
+      .row-actions {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      
+      .row-actions button,
+      .row-actions a {
+        width: 100%;
+        text-align: center;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- 导航栏 -->
+  <nav class="navbar">
+    <a href="/" class="navbar-brand">Makeup Bot</a>
+    <div class="navbar-actions">
+      <a href="/" class="btn-back">← 返回首页</a>
+    </div>
+  </nav>
+
+  <div class="container">
+    <!-- 标题区域 -->
+    <div class="hero-section">
+      <h1 class="hero-title">生成任务</h1>
+      <p class="hero-subtitle">自定义配置和日期</p>
+    </div>
+
+    <!-- 成功消息 -->
+    {% if result %}
+    <div class="success-message" id="success-message">
+      <b>✓ 已生成任务：</b>{{ result.created }} 条
+      <p>3秒后自动跳转回首页...</p>
+    </div>
+    {% endif %}
+    
+    <!-- 错误消息 -->
+    {% if error %}
+    <div class="error-message" id="error-message">
+      <b>✗ 错误：</b>{{ error }}
+    </div>
+    {% endif %}
+
+    <!-- 表单 -->
+    <form method="post" action="/admin/generate-tasks">
+      <!-- 日期和时间选择器 -->
+      <div class="datetime-selector">
+        <div class="datetime-selector-title">📅 任务生成时间范围</div>
+        
+        <!-- 日期范围 -->
+        <div class="date-range-group">
+          <div class="date-input-group">
+            <label for="start_date">开始日期</label>
+            <input type="date" id="start_date" name="start_date" value="{{ start_date or '' }}" required>
+          </div>
+          <div class="range-separator">→</div>
+          <div class="date-input-group">
+            <label for="end_date">结束日期</label>
+            <input type="date" id="end_date" name="end_date" value="{{ end_date or '' }}" required>
+          </div>
+        </div>
+        
+        <!-- 时间范围 -->
+        <div class="time-range-group">
+          <div class="date-input-group">
+            <label for="start_time">开始时间</label>
+            <input type="time" id="start_time" name="start_time" value="{{ start_time or '00:00' }}" required>
+          </div>
+          <div class="range-separator">→</div>
+          <div class="date-input-group">
+            <label for="end_time">结束时间</label>
+            <input type="time" id="end_time" name="end_time" value="{{ end_time or '23:59' }}" required>
+          </div>
+        </div>
+        
+        <div class="datetime-selector-hint">
+          💡 任务将在指定日期范围内生成，每个任务的执行时间会在该时间范围内随机分配。默认范围为今天 00:00 - 23:59
+        </div>
+      </div>
+
+      <!-- 提示信息 -->
+      <div class="info-box">
+        提示：这里配置的是"需要执行的次数"，生成后会写入任务队列，调度器会按 scheduled_at 自动执行。
+      </div>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th style="width: 240px;">动作</th>
+            <th>接口</th>
+            <th style="width: 160px;">执行次数</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>创建用户（完整注册流程）</td>
+            <td><code>POST /admin/create-user-once</code></td>
+            <td><input type="number" name="create_user" min="0" value="{{ plan.create_user }}"></td>
+          </tr>
+          <tr>
+            <td>签到</td>
+            <td><code>POST /admin/module/checkin</code></td>
+            <td><input type="number" name="checkin" min="0" value="{{ plan.checkin }}"></td>
+          </tr>
+          <tr>
+            <td>用户上传脸</td>
+            <td><code>POST /admin/module/face-upload</code></td>
+            <td><input type="number" name="face_upload" min="0" value="{{ plan.face_upload }}"></td>
+          </tr>
+          <tr>
+            <td>模拟用户妆造</td>
+            <td><code>POST /admin/module/makeup-creation</code></td>
+            <td><input type="number" name="makeup_creation" min="0" value="{{ plan.makeup_creation }}"></td>
+          </tr>
+          <tr>
+            <td>发布妆造到社区</td>
+            <td><code>POST /admin/module/post-community</code></td>
+            <td><input type="number" name="post_community" min="0" value="{{ plan.post_community }}"></td>
+          </tr>
+          <tr>
+            <td>点赞/收藏（含评论逻辑）</td>
+            <td><code>POST /admin/module/like-collect</code></td>
+            <td><input type="number" name="like_collect" min="0" value="{{ plan.like_collect }}"></td>
+          </tr>
+          <tr>
+            <td>点赞评论</td>
+            <td><code>POST /admin/module/like-comment</code></td>
+            <td><input type="number" name="like_comment" min="0" value="{{ plan.like_comment }}"></td>
+          </tr>
+          <tr>
+            <td>关注某个用户</td>
+            <td><code>POST /admin/module/follow-user</code></td>
+            <td><input type="number" name="follow_user" min="0" value="{{ plan.follow_user }}"></td>
+          </tr>
+          <tr>
+            <td>话题收藏</td>
+            <td><code>POST /admin/module/collect-topic</code></td>
+            <td><input type="number" name="collect_topic" min="0" value="{{ plan.collect_topic }}"></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="row-actions">
+        <button type="submit" class="btn-primary">生成任务</button>
+        <a href="/" class="btn-secondary">返回 Dashboard</a>
+        <button type="button" class="btn-ghost" onclick="fillZero()">全部置 0</button>
+      </div>
+    </form>
+  </div>
+
+  <script>
+    /**
+     * 把所有次数输入框置为 0
+     * @returns {void}
+     */
+    function fillZero() {
+      const inputs = document.querySelectorAll('input[type="number"]');
+      inputs.forEach((el) => { el.value = 0; });
+    }
+
+    /**
+     * 验证时间范围
+     * @returns {boolean} 是否通过验证
+     */
+    /**
+     * 验证日期和时间范围
+     * @returns {boolean} 是否通过验证
+     */
+    function validateDateTimeRange() {
+      const startDateInput = document.getElementById('start_date');
+      const endDateInput = document.getElementById('end_date');
+      const startTimeInput = document.getElementById('start_time');
+      const endTimeInput = document.getElementById('end_time');
+
+      if (!startDateInput.value || !endDateInput.value || !startTimeInput.value || !endTimeInput.value) {
+        return true; // 让 HTML5 验证处理必填字段
+      }
+
+      // 组合日期和时间
+      const startDateTime = new Date(startDateInput.value + 'T' + startTimeInput.value);
+      const endDateTime = new Date(endDateInput.value + 'T' + endTimeInput.value);
+
+      // 验证结束日期时间不能早于开始日期时间
+      if (endDateTime < startDateTime) {
+        alert('结束日期时间不能早于开始日期时间');
+        return false;
+      }
+
+      return true;
+    }
+
+    // 表单提交前验证
+    window.onload = function() {
+      const form = document.querySelector('form[method="post"]');
+      if (form) {
+        form.addEventListener('submit', function(e) {
+          if (!validateDateTimeRange()) {
+            e.preventDefault();
+            return false;
+          }
+        });
+      }
+
+      // 如果生成成功，3秒后跳转回首页
+      const successMsg = document.getElementById('success-message');
+      if (successMsg) {
+        setTimeout(function() {
+          window.location.href = '/';
+        }, 3000);
+      }
+    };
+  </script>
+</body>
+</html>

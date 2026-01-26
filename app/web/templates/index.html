@@ -1,0 +1,1787 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title data-i18n="title">Makeup Bot Control Center</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    :root {
+      --bg-primary: #000000;
+      --bg-secondary: #0a0a0a;
+      --bg-card: #1a1a1a;
+      --text-primary: #ffffff;
+      --text-secondary: #a0a0a0;
+      --accent-cyan: #00ffff;
+      --accent-purple: #ff00ff;
+      --accent-green: #00ff00;
+      --accent-red: #ff0000;
+      --border-color: rgba(255, 255, 255, 0.1);
+      --shadow-glow: 0 0 20px rgba(0, 255, 255, 0.3);
+    }
+    
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+    
+    /* 顶部导航栏 */
+    .navbar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(0, 0, 0, 0.8);
+      backdrop-filter: blur(20px) saturate(180%);
+      border-bottom: 1px solid var(--border-color);
+      padding: 0 40px;
+      height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    
+    .navbar-brand {
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--text-primary);
+      text-decoration: none;
+      letter-spacing: -0.5px;
+    }
+    
+    .navbar-actions {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+    
+    .lang-switcher {
+      display: flex;
+      gap: 8px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 8px;
+      padding: 4px;
+    }
+    
+    .lang-btn {
+      padding: 6px 12px;
+      background: transparent;
+      border: none;
+      color: var(--text-secondary);
+      cursor: pointer;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+    
+    .lang-btn.active {
+      background: rgba(255, 255, 255, 0.1);
+      color: var(--text-primary);
+    }
+    
+    .lang-btn:hover {
+      color: var(--text-primary);
+    }
+    
+    .btn-logout {
+      padding: 8px 16px;
+      background: rgba(255, 0, 0, 0.1);
+      border: 1px solid rgba(255, 0, 0, 0.3);
+      color: var(--accent-red);
+      cursor: pointer;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+    
+    .btn-logout:hover {
+      background: rgba(255, 0, 0, 0.2);
+      border-color: rgba(255, 0, 0, 0.5);
+      box-shadow: 0 0 10px rgba(255, 0, 0, 0.3);
+    }
+    
+    .btn-admin {
+      padding: 8px 16px;
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+      color: #000;
+      border: none;
+      border-radius: 8px;
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 600;
+      transition: all 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    
+    .btn-admin:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(0, 255, 255, 0.3);
+    }
+    
+    /* 主容器 */
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 60px 40px;
+    }
+    
+    /* 标题区域 */
+    .hero-section {
+      text-align: center;
+      margin-bottom: 80px;
+    }
+    
+    .hero-title {
+      font-size: 56px;
+      font-weight: 700;
+      letter-spacing: -2px;
+      margin-bottom: 16px;
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    
+    .hero-subtitle {
+      font-size: 20px;
+      color: var(--text-secondary);
+      font-weight: 400;
+    }
+    
+    /* 控制面板 */
+    .control-section {
+      margin-bottom: 80px;
+    }
+    
+    .section-title {
+      font-size: 32px;
+      font-weight: 600;
+      margin-bottom: 24px;
+      letter-spacing: -1px;
+    }
+    
+    .control-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 20px;
+      margin-bottom: 30px;
+    }
+    
+    .btn-primary {
+      grid-column: 1 / -1;
+      padding: 16px 32px;
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+      color: #000;
+      border: none;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s;
+      text-decoration: none;
+      display: inline-block;
+      text-align: center;
+    }
+    
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-glow);
+    }
+    
+    .btn-module {
+      padding: 20px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      color: var(--text-primary);
+      font-size: 15px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.3s;
+      text-align: left;
+    }
+    
+    .btn-module:hover {
+      border-color: var(--accent-cyan);
+      background: rgba(0, 255, 255, 0.05);
+      transform: translateY(-2px);
+    }
+    
+    /* 数据卡片区域 */
+    .data-section {
+      margin-bottom: 80px;
+    }
+    .tab-nav {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .tab-btn {
+      padding: 10px 18px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      color: var(--text-primary);
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.2s;
+    }
+    .tab-btn.active {
+      border-color: var(--accent-cyan);
+      box-shadow: var(--shadow-glow);
+    }
+    
+    /* 分页 */
+    .pagination {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin: 24px 0;
+      padding: 10px 14px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      font-family: 'Inter', sans-serif;
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+    .pagination .page-info {
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+    .pagination .page-btn {
+      min-width: 34px;
+      padding: 6px 10px;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+      background: var(--bg-card);
+      color: var(--text-primary);
+      text-decoration: none;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-weight: 600;
+    }
+    .pagination .page-btn:hover {
+      border-color: var(--accent-cyan);
+      box-shadow: var(--shadow-glow);
+    }
+    .pagination .page-btn.active {
+      border-color: var(--accent-cyan);
+      background: rgba(0, 255, 255, 0.1);
+      color: var(--text-primary);
+      box-shadow: var(--shadow-glow);
+    }
+    .pagination .ellipsis {
+      color: var(--text-secondary);
+      padding: 0 4px;
+    }
+    .pagination-row {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      margin-top: 12px;
+    }
+    
+    .data-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+    }
+    
+    .inline-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      padding: 12px 14px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      box-shadow: var(--shadow-soft);
+    }
+    
+    /* 筛选器样式 */
+    .filter-container {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    
+    .filter-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      min-width: 200px;
+    }
+    
+    .filter-label {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    .filter-input {
+      width: 100%;
+      padding: 10px 12px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      color: var(--text-primary);
+      border-radius: 8px;
+      font-size: 14px;
+      font-family: 'Inter', sans-serif;
+      transition: all 0.2s;
+    }
+    
+    .filter-input:focus {
+      outline: none;
+      border-color: var(--accent-cyan);
+      box-shadow: 0 0 0 3px rgba(0, 255, 255, 0.1);
+    }
+    
+    .filter-input::-webkit-calendar-picker-indicator {
+      filter: invert(1);
+      cursor: pointer;
+      opacity: 0.8;
+    }
+    
+    .filter-input::-webkit-calendar-picker-indicator:hover {
+      opacity: 1;
+    }
+    
+    .btn-filter {
+      padding: 10px 20px;
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+      color: #000;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    
+    .btn-filter:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(0, 255, 255, 0.3);
+    }
+    
+    .btn-filter-reset {
+      padding: 10px 20px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      color: var(--text-primary);
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    
+    .btn-filter-reset:hover {
+      border-color: var(--accent-cyan);
+      background: rgba(0, 255, 255, 0.05);
+    }
+    
+    .data-count {
+      font-size: 14px;
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+    
+    /* 卡片网格 */
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 20px;
+    }
+    
+    .data-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 24px;
+      transition: all 0.3s;
+    }
+    
+    .data-card:hover {
+      border-color: var(--accent-cyan);
+      transform: translateY(-4px);
+      box-shadow: var(--shadow-glow);
+    }
+    
+    .card-title {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 12px;
+      color: var(--accent-cyan);
+    }
+    
+    .card-content {
+      font-size: 14px;
+      color: var(--text-secondary);
+      line-height: 1.8;
+    }
+    
+    .card-label {
+      font-size: 12px;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+    }
+    
+    .card-value {
+      font-size: 16px;
+      color: var(--text-primary);
+      font-weight: 500;
+      margin-bottom: 16px;
+    }
+    
+    /* 表格样式 */
+    .data-table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    
+    .data-table thead {
+      background: rgba(255, 255, 255, 0.03);
+    }
+    
+    .data-table th {
+      padding: 16px 20px;
+      text-align: left;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 1px solid var(--border-color);
+    }
+    
+    .data-table td {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border-color);
+      color: var(--text-primary);
+      font-size: 14px;
+    }
+    
+    .data-table tbody tr:last-child td {
+      border-bottom: none;
+    }
+    
+    .data-table tbody tr:hover {
+      background: rgba(255, 255, 255, 0.02);
+    }
+    
+    .data-table a {
+      color: var(--accent-cyan);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+    
+    .data-table a:hover {
+      color: var(--accent-purple);
+    }
+    
+    /* 状态标签 */
+    .status-badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      text-transform: uppercase;
+    }
+    
+    .status-pending {
+      background: rgba(255, 165, 0, 0.15);
+      color: #ffaa00;
+    }
+    
+    .status-completed {
+      background: rgba(0, 255, 0, 0.15);
+      color: var(--accent-green);
+    }
+    
+    .status-failed {
+      background: rgba(255, 0, 0, 0.15);
+      color: var(--accent-red);
+    }
+    
+    .status-active {
+      background: rgba(0, 255, 255, 0.15);
+      color: var(--accent-cyan);
+    }
+    
+    /* 空状态 */
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--text-secondary);
+    }
+    
+    .empty-state-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+      opacity: 0.5;
+    }
+    
+    /* 模态框 */
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 1000;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.8);
+      backdrop-filter: blur(10px);
+    }
+    
+    .modal-content {
+      background: var(--bg-card);
+      margin: 5% auto;
+      padding: 40px;
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      width: 90%;
+      max-width: 800px;
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+    
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+    }
+    
+    .modal-title {
+      font-size: 24px;
+      font-weight: 600;
+    }
+    
+    .close {
+      color: var(--text-secondary);
+      font-size: 28px;
+      font-weight: 300;
+      cursor: pointer;
+      transition: color 0.2s;
+      line-height: 1;
+    }
+    
+    .close:hover {
+      color: var(--text-primary);
+    }
+    
+    .result-success {
+      color: var(--accent-green);
+    }
+    
+    .result-error {
+      color: var(--accent-red);
+    }
+    
+    .result-warning {
+      color: #ffaa00;
+    }
+    
+    pre {
+      background: rgba(0, 0, 0, 0.5);
+      padding: 16px;
+      border-radius: 8px;
+      overflow-x: auto;
+      font-size: 13px;
+      border: 1px solid var(--border-color);
+    }
+    
+    /* 刷新按钮 */
+    .btn-refresh {
+      padding: 10px 20px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      color: var(--text-primary);
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.2s;
+    }
+    
+    .btn-refresh:hover {
+      border-color: var(--accent-cyan);
+      background: rgba(0, 255, 255, 0.05);
+    }
+    
+    /* 滚动条 */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    
+    ::-webkit-scrollbar-track {
+      background: var(--bg-secondary);
+    }
+    
+    ::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 4px;
+    }
+    
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(255, 255, 255, 0.3);
+    }
+    
+    /* 用户表格专用样式 */
+    .user-account {
+      font-weight: 600;
+      color: var(--text-primary);
+      word-break: break-all;
+    }
+    
+    .user-password {
+      font-family: "JetBrains Mono", "Fira Code", Consolas, monospace;
+      color: var(--accent-cyan);
+      letter-spacing: 0.4px;
+    }
+
+    .user-token {
+      font-family: "JetBrains Mono", "Fira Code", Consolas, monospace;
+      color: var(--text-secondary);
+      max-width: 320px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    
+    /* 图片放大模态框 */
+    .image-modal {
+      display: none;
+      position: fixed;
+      z-index: 2000;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.95);
+      backdrop-filter: blur(10px);
+      cursor: pointer;
+    }
+    
+    .image-modal.active {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .image-modal-content {
+      max-width: 90vw;
+      max-height: 90vh;
+      object-fit: contain;
+      border-radius: 8px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+      animation: zoomIn 0.3s ease-out;
+    }
+    
+    @keyframes zoomIn {
+      from {
+        transform: scale(0.8);
+        opacity: 0;
+      }
+      to {
+        transform: scale(1);
+        opacity: 1;
+      }
+    }
+    
+    .image-modal-info {
+      position: absolute;
+      bottom: 40px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.8);
+      padding: 12px 24px;
+      border-radius: 8px;
+      color: var(--text-primary);
+      text-align: center;
+    }
+    
+    .image-modal-close {
+      position: absolute;
+      top: 20px;
+      right: 30px;
+      color: var(--text-primary);
+      font-size: 40px;
+      font-weight: 300;
+      cursor: pointer;
+      transition: all 0.2s;
+      z-index: 2001;
+      width: 50px;
+      height: 50px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      background: rgba(0, 0, 0, 0.5);
+    }
+    
+    .image-modal-close:hover {
+      background: rgba(255, 0, 0, 0.7);
+      transform: rotate(90deg);
+    }
+    
+    /* 响应式 */
+    @media (max-width: 768px) {
+      .container {
+        padding: 40px 20px;
+      }
+      
+      .hero-title {
+        font-size: 36px;
+      }
+      
+      .card-grid {
+        grid-template-columns: 1fr;
+      }
+      
+      .control-grid {
+        grid-template-columns: 1fr;
+      }
+      
+      .users-image-grid {
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        gap: 12px;
+      }
+      
+      .user-image-preview {
+        height: 150px;
+      }
+    }
+  </style>
+</head>
+<body data-user-page="{{ user_page or 1 }}" data-task-page="{{ task_page or 1 }}">
+  <!-- 导航栏 -->
+  <nav class="navbar">
+    <a href="/" class="navbar-brand" data-i18n="nav.brand">Makeup Bot</a>
+    <div class="navbar-actions">
+      <a href="/admin/images" class="btn-admin" data-i18n="nav.images">📷 用户头像配置</a>
+      <div class="lang-switcher">
+        <button class="lang-btn active" onclick="switchLang('zh')" data-lang="zh">中文</button>
+        <button class="lang-btn" onclick="switchLang('en')" data-lang="en">English</button>
+      </div>
+      <button class="btn-logout" onclick="handleLogout()" data-i18n="nav.logout">退出登录</button>
+    </div>
+  </nav>
+
+  <div class="container">
+    <!-- 标题区域 -->
+    <div class="hero-section">
+      <h1 class="hero-title" data-i18n="hero.title">Control Center</h1>
+      <p class="hero-subtitle" data-i18n="hero.subtitle">Automated Makeup Bot Management System</p>
+    </div>
+
+    <!-- 控制面板 -->
+    <div class="control-section">
+      <h2 class="section-title" data-i18n="control.title">System Control</h2>
+      <div class="control-grid">
+        <a href="/admin/generate-tasks" class="btn-primary" data-i18n="control.generate">⚡ Generate Tasks</a>
+        <button class="btn-module" onclick="callModule('/admin/create-user-once', '1. CREATE USER')" data-i18n="module.create_user">1. Create User</button>
+        <button class="btn-module" onclick="callModule('/admin/module/checkin', '2. CHECK-IN')" data-i18n="module.checkin">2. Check-in</button>
+        <button class="btn-module" onclick="callModule('/admin/module/face-upload', '3. FACE UPLOAD')" data-i18n="module.face_upload">3. Face Upload</button>
+        <button class="btn-module" onclick="callModule('/admin/module/makeup-creation', '4. MAKEUP CREATION')" data-i18n="module.makeup_creation">4. Makeup Creation</button>
+        <button class="btn-module" onclick="callModule('/admin/module/post-community', '5. POST TO COMMUNITY')" data-i18n="module.post_community">5. Post to Community</button>
+        <button class="btn-module" onclick="callModule('/admin/module/like-collect', '6. LIKE & COLLECT')" data-i18n="module.like_collect">6. Like & Collect</button>
+        <button class="btn-module" onclick="callModule('/admin/module/like-comment', '7. LIKE COMMENT')" data-i18n="module.like_comment">7. Like Comment</button>
+        <button class="btn-module" onclick="callModule('/admin/module/follow-user', '8. FOLLOW USER')" data-i18n="module.follow_user">8. Follow User</button>
+        <button class="btn-module" onclick="callModule('/admin/module/collect-topic', '9. COLLECT TOPIC')" data-i18n="module.collect_topic">9. Collect Topic</button>
+      </div>
+    </div>
+
+    <!-- 结果模态框 -->
+    <div id="resultModal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 class="modal-title" id="modalTitle">Execution Result</h2>
+          <span class="close" onclick="closeModal()">&times;</span>
+        </div>
+        <div id="modalBody"></div>
+      </div>
+    </div>
+    
+    <!-- 切换 Tab -->
+    <div class="tab-nav">
+      <button class="tab-btn active" data-tab="tab-users" data-i18n="tab.users">User List</button>
+      <button class="tab-btn" data-tab="tab-tasks" data-i18n="tab.tasks">Today's Tasks</button>
+      <button class="tab-btn" data-tab="tab-execution" data-i18n="tab.execution">Today's Execution Log</button>
+    </div>
+
+    <!-- 用户列表 -->
+    <div class="data-section tab-section" id="tab-users">
+      <div class="data-header">
+        <h2 class="section-title" data-i18n="users.title">用户列表</h2>
+        <div class="inline-actions">
+          <div class="filter-container">
+            <div class="filter-group">
+              <label class="filter-label" for="users-start" data-i18n="users.start">开始时间</label>
+              <input type="datetime-local" step="1" id="users-start" class="filter-input" />
+            </div>
+            <div class="filter-group">
+              <label class="filter-label" for="users-end" data-i18n="users.end">结束时间</label>
+              <input type="datetime-local" step="1" id="users-end" class="filter-input" />
+            </div>
+            <div style="display: flex; align-items: flex-end; gap: 8px;">
+              <button class="btn-filter" onclick="loadUsers(1)" data-i18n="users.filter">🔍 筛选</button>
+              <button class="btn-filter-reset" onclick="resetUserFilter()" data-i18n="users.reset">🔄 重置</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th data-i18n="users.id">用户ID</th>
+            <th data-i18n="users.account">账号</th>
+            <th data-i18n="users.password">密码</th>
+            <th data-i18n="users.created">创建时间</th>
+            <th data-i18n="users.status">状态</th>
+            <th data-i18n="users.token">Token</th>
+          </tr>
+        </thead>
+        <tbody id="users-tbody">
+          <tr>
+            <td colspan="6" class="empty-state" data-i18n="users.empty">Loading...</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="pagination-row">
+        <div class="data-count" id="users-total" data-i18n="users.count" data-count="0">总计: 0 条记录</div>
+        <div class="pagination" id="users-pagination"></div>
+      </div>
+    </div>
+
+    <!-- 图片放大模态框 -->
+    <div class="image-modal" id="imageModal" onclick="closeImageModal()">
+      <span class="image-modal-close" onclick="closeImageModal()">&times;</span>
+      <img class="image-modal-content" id="modalImage" src="" alt="">
+      <div class="image-modal-info" id="modalImageInfo"></div>
+    </div>
+
+    <!-- 今日任务 -->
+    <div class="data-section tab-section" id="tab-tasks" style="display:none;">
+      <div class="data-header">
+        <h2 class="section-title" data-i18n="tasks.title">任务</h2>
+        <div class="inline-actions">
+          <div class="filter-container">
+            <div class="filter-group">
+              <label class="filter-label" for="tasks-type" data-i18n="tasks.type_filter">任务类型</label>
+              <select id="tasks-type" class="filter-input">
+                <option value="">全部</option>
+                <option value="create_user">创建用户</option>
+                <option value="checkin">签到</option>
+                <option value="face_upload">上传人脸</option>
+                <option value="makeup_creation">创建妆造</option>
+                <option value="post_community">发布到社区</option>
+                <option value="like_collect">点赞收藏</option>
+                <option value="like_comment">点赞评论</option>
+                <option value="follow_user">关注用户</option>
+                <option value="collect_topic">收藏话题</option>
+              </select>
+            </div>
+            <div class="filter-group">
+              <label class="filter-label" for="tasks-start" data-i18n="tasks.start">开始时间</label>
+              <input type="datetime-local" step="1" id="tasks-start" class="filter-input" />
+            </div>
+            <div class="filter-group">
+              <label class="filter-label" for="tasks-end" data-i18n="tasks.end">结束时间</label>
+              <input type="datetime-local" step="1" id="tasks-end" class="filter-input" />
+            </div>
+            <div style="display: flex; align-items: flex-end; gap: 8px;">
+              <button class="btn-filter" onclick="loadTasks(1)" data-i18n="tasks.filter">🔍 筛选</button>
+              <button class="btn-filter-reset" onclick="resetTaskFilter()" data-i18n="tasks.reset">🔄 重置</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      {% if tasks|length > 0 %}
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th data-i18n="tasks.id">Task ID</th>
+            <th data-i18n="tasks.type">Type</th>
+            <th data-i18n="tasks.user">User ID</th>
+            <th data-i18n="tasks.user_email">User Email</th>
+            <th data-i18n="tasks.scheduled">Scheduled At</th>
+            <th data-i18n="tasks.status">Status</th>
+            <th data-i18n="tasks.attempts">Attempts</th>
+          </tr>
+        </thead>
+        <tbody id="tasks-tbody">
+          <tr><td colspan="7" class="empty-state">Loading...</td></tr>
+        </tbody>
+      </table>
+      <div class="pagination-row">
+        <div class="data-count" id="tasks-total" data-i18n="tasks.count" data-count="0">总计: 0 个任务</div>
+        <div class="pagination" id="tasks-pagination"></div>
+      </div>
+      {% else %}
+      <div class="empty-state">
+        <div class="empty-state-icon">📋</div>
+        <div data-i18n="tasks.empty">No tasks for today</div>
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- 今日执行日志 -->
+    <div class="data-section tab-section" id="tab-execution" style="display:none;">
+      <div class="data-header">
+        <h2 class="section-title" data-i18n="execution.title">Today's Execution Log</h2>
+        <button class="btn-refresh" onclick="loadTaskProgress()" data-i18n="common.refresh">🔄 Refresh</button>
+      </div>
+      <table class="data-table" id="progress-table">
+        <thead>
+          <tr>
+            <th data-i18n="execution.user_id">User ID</th>
+            <th data-i18n="execution.user_email">User Email</th>
+            <th data-i18n="execution.action">Action</th>
+            <th data-i18n="execution.api">API Endpoint</th>
+            <th data-i18n="execution.time">Executed At</th>
+            <th data-i18n="execution.status">Status</th>
+            <th data-i18n="execution.message">Message</th>
+          </tr>
+        </thead>
+        <tbody id="executed-tbody">
+          <tr>
+            <td colspan="7" class="empty-state" data-i18n="execution.empty">Click "Refresh" to load data</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="pagination-row">
+        <div class="data-count" id="executed-total" data-i18n="executed.count" data-count="0">总计: 0 次执行</div>
+        <div class="pagination" id="executed-pagination"></div>
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    // Token管理
+    const TOKEN_KEY = 'admin_token';
+    
+    /**
+     * 获取token
+     * @returns {string|null} token字符串或null
+     */
+    function getToken() {
+      return localStorage.getItem(TOKEN_KEY);
+    }
+    
+    /**
+     * 检查是否已登录，如果未登录则跳转到登录页
+     * 注意：现在使用 cookie 认证，服务器端会自动处理重定向
+     * 这个函数主要用于 API 请求时的 token 检查
+     */
+    function checkAuth() {
+      // 不再自动重定向，因为服务器端已经处理了认证
+      // 如果用户访问首页但没有有效的 cookie，服务器会重定向到登录页
+      const token = getToken();
+      return !!token; // 只返回是否有 token，不自动重定向
+    }
+    
+    /**
+     * 统一的fetch请求函数，自动添加token
+     * @param {string} url - 请求URL
+     * @param {Object} options - fetch选项
+     * @returns {Promise<Response>} fetch响应
+     */
+    async function authFetch(url, options = {}) {
+      // 尝试从 localStorage 获取 token（用于 API 请求）
+      const token = getToken();
+      
+      // 添加token到headers（如果有的话）
+      const headers = {
+        ...options.headers,
+      };
+      if (token) {
+        headers['X-Token'] = token;
+      }
+      
+      // 设置超时（默认 120 秒，对于长时间运行的任务）
+      const timeout = options.timeout || 120000; // 120秒
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeout);
+      
+      try {
+        const response = await fetch(url, {
+          ...options,
+          headers,
+          signal: controller.signal,
+        });
+        
+        clearTimeout(timeoutId);
+        
+        // 如果返回401，清除token并跳转到登录页
+        if (response.status === 401) {
+          localStorage.removeItem(TOKEN_KEY);
+          window.location.href = '/login.html';
+          return Promise.reject(new Error('认证失败'));
+        }
+        
+        return response;
+      } catch (error) {
+        clearTimeout(timeoutId);
+        if (error.name === 'AbortError') {
+          throw new Error('请求超时，请稍后重试');
+        }
+        throw error;
+      }
+    }
+    
+    /**
+     * 处理退出登录
+     */
+    async function handleLogout() {
+      if (!confirm('确定要退出登录吗？')) {
+        return;
+      }
+      
+      try {
+        // 调用退出登录API
+        await fetch('/auth/logout', {
+          method: 'POST',
+          credentials: 'include', // 确保发送cookie
+        });
+      } catch (error) {
+        console.error('Logout error:', error);
+      } finally {
+        // 无论API调用是否成功，都清除本地token并跳转
+        localStorage.removeItem(TOKEN_KEY);
+        window.location.href = '/login.html';
+      }
+    }
+    
+    // 不再在页面加载时检查token，因为服务器端已经处理了认证
+    // 如果用户没有有效的 cookie，服务器会重定向到登录页
+    
+    // 语言包
+    const i18n = {
+      zh: {
+        'title': 'Makeup Bot 控制中心',
+        'nav.brand': 'Makeup Bot',
+        'nav.images': '📷 用户头像配置',
+        'hero.title': '控制中心',
+        'hero.subtitle': '自动化妆造机器人管理系统',
+        'control.title': '系统控制',
+        'control.generate': '⚡ 生成任务',
+        'module.create_user': '1. 创建用户',
+        'module.checkin': '2. 签到',
+        'module.face_upload': '3. 上传人脸',
+        'module.makeup_creation': '4. 创建妆造',
+        'module.post_community': '5. 发布到社区',
+        'module.like_collect': '6. 点赞收藏',
+        'module.like_comment': '7. 点赞评论',
+        'module.follow_user': '8. 关注用户',
+        'module.collect_topic': '9. 收藏话题',
+        'execution.title': '今日执行日志',
+        'execution.user_id': '用户ID',
+        'execution.action': '动作',
+        'execution.api': 'API端点',
+        'execution.time': '执行时间',
+        'execution.status': '状态',
+        'execution.message': '消息',
+        'execution.empty': '点击“刷新”加载数据',
+        'tab.execution': '今日执行日志',
+        'tab.users': '用户列表',
+        'tab.tasks': '任务',
+        'users.title': '用户列表',
+        'users.count': '总计: {count} 条记录',
+        'users.id': '用户ID',
+        'users.account': '账号',
+        'users.password': '密码',
+        'users.token': 'Token',
+        'users.email': '邮箱',
+        'users.created': '创建时间',
+        'users.status': '状态',
+        'users.more': '显示前20条，共 {count} 个用户',
+        'users.empty': '暂无用户',
+        'users.start': '开始时间',
+        'users.end': '结束时间',
+        'users.filter': '筛选',
+        'users.reset': '重置',
+        'tasks.title': '任务',
+        'tasks.count': '总计: {count} 个任务',
+        'tasks.id': '任务ID',
+        'tasks.type': '类型',
+        'tasks.user': '用户ID',
+        'tasks.user_email': '用户邮箱',
+        'tasks.scheduled': '计划时间',
+        'tasks.status': '状态',
+        'tasks.attempts': '尝试次数',
+        'tasks.start': '开始日期',
+        'tasks.end': '结束日期',
+        'tasks.filter': '筛选',
+        'tasks.reset': '重置',
+        'tasks.empty': '今日暂无任务',
+        'executed.title': '今日执行任务',
+        'executed.count': '总计: {count} 次执行',
+        'executed.user_id': '用户ID',
+        'executed.user_email': '用户邮箱',
+        'executed.action': '动作',
+        'executed.api': 'API端点',
+        'executed.time': '执行时间',
+        'executed.status': '状态',
+        'executed.empty': '今日暂无执行任务',
+        'common.refresh': '🔄 刷新'
+      },
+      en: {
+        'title': 'Makeup Bot Control Center',
+        'nav.brand': 'Makeup Bot',
+        'nav.images': '📷 User Avatar Config',
+        'nav.logout': 'Logout',
+        'hero.title': 'Control Center',
+        'hero.subtitle': 'Automated Makeup Bot Management System',
+        'control.title': 'System Control',
+        'control.generate': '⚡ Generate Tasks',
+        'module.create_user': '1. Create User',
+        'module.checkin': '2. Check-in',
+        'module.face_upload': '3. Face Upload',
+        'module.makeup_creation': '4. Makeup Creation',
+        'module.post_community': '5. Post to Community',
+        'module.like_collect': '6. Like & Collect',
+        'module.like_comment': '7. Like Comment',
+        'module.follow_user': '8. Follow User',
+        'module.collect_topic': '9. Collect Topic',
+        'execution.title': 'Today\'s Execution Log',
+        'execution.user_id': 'User ID',
+        'execution.action': 'Action',
+        'execution.api': 'API Endpoint',
+        'execution.time': 'Executed At',
+        'execution.status': 'Status',
+        'execution.message': 'Message',
+        'execution.empty': 'Click "Refresh" to load data',
+        'tab.execution': "Today's Execution Log",
+        'tab.users': 'User List',
+        'tab.tasks': 'Tasks',
+        'users.title': 'User List',
+        'users.count': 'Total: {count} records',
+        'users.id': 'User ID',
+        'users.account': 'Account',
+        'users.password': 'Password',
+        'users.token': 'Token',
+        'users.email': 'Email',
+        'users.created': 'Created At',
+        'users.status': 'Status',
+        'users.more': 'Showing first 20 of {count} users',
+        'users.empty': 'No users found',
+        'tasks.title': 'Tasks',
+        'tasks.count': 'Total: {count} tasks',
+        'tasks.id': 'Task ID',
+        'tasks.type': 'Type',
+        'tasks.user': 'User ID',
+        'tasks.user_email': 'User Email',
+        'tasks.scheduled': 'Scheduled At',
+        'tasks.status': 'Status',
+        'tasks.attempts': 'Attempts',
+        'tasks.start': 'Start Date',
+        'tasks.end': 'End Date',
+        'tasks.filter': 'Filter',
+        'tasks.reset': 'Reset',
+        'tasks.empty': 'No tasks for today',
+        'executed.title': 'Today\'s Executed Tasks',
+        'executed.count': 'Total: {count} executions',
+        'executed.user_id': 'User ID',
+        'executed.user_email': 'User Email',
+        'executed.action': 'Action',
+        'executed.api': 'API Endpoint',
+        'executed.time': 'Executed At',
+        'executed.status': 'Status',
+        'executed.empty': 'No executed tasks today',
+        'common.refresh': '🔄 Refresh'
+      }
+    };
+    
+    // 当前语言
+    let currentLang = localStorage.getItem('lang') || 'zh';
+    
+    // 切换语言
+    function switchLang(lang) {
+      currentLang = lang;
+      localStorage.setItem('lang', lang);
+      
+      // 更新按钮状态
+      document.querySelectorAll('.lang-btn').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.getAttribute('data-lang') === lang) {
+          btn.classList.add('active');
+        }
+      });
+      
+      // 更新所有文本
+      document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        if (i18n[lang] && i18n[lang][key]) {
+          let text = i18n[lang][key];
+          // 处理模板变量 - 从data-count属性获取
+          const count = el.getAttribute('data-count');
+          if (count !== null && text.includes('{count}')) {
+            text = text.replace(/{count}/g, count);
+          }
+          el.textContent = text;
+        }
+      });
+      
+      // 更新页面标题
+      document.title = i18n[lang]['title'];
+    }
+    
+    // 页面加载时应用语言 & 初始化tab
+    window.addEventListener('DOMContentLoaded', () => {
+      const initialUserPage = Number(document.body.getAttribute('data-user-page') || 1);
+      const initialTaskPage = Number(document.body.getAttribute('data-task-page') || 1);
+      switchLang(currentLang);
+      initTabs();
+      loadTaskProgress();
+      initUserFilter();
+      loadUsers(initialUserPage);
+      initTaskFilter();
+      loadTasks(initialTaskPage);
+    });
+
+    // Tab 切换
+    function initTabs() {
+      const tabs = document.querySelectorAll('.tab-btn');
+      const sections = document.querySelectorAll('.tab-section');
+      const urlParams = new URLSearchParams(window.location.search);
+      const initialTab = urlParams.get('tab') || 'users';
+      tabs.forEach(btn => {
+        btn.addEventListener('click', () => {
+          tabs.forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          const target = btn.getAttribute('data-tab');
+          sections.forEach(sec => {
+            sec.style.display = sec.id === target ? 'block' : 'none';
+          });
+          const params = new URLSearchParams(window.location.search);
+          params.set('tab', target.replace('tab-', ''));
+          window.history.replaceState({}, '', `${location.pathname}?${params.toString()}`);
+        });
+      });
+      const targetId = `tab-${initialTab}`;
+      const targetBtn = Array.from(tabs).find(b => b.getAttribute('data-tab') === targetId) || tabs[0];
+      if (targetBtn) targetBtn.click();
+    }
+    
+    /**
+     * 加载任务进度
+     */
+    function loadTaskProgress(page = 1) {
+      loadSection('/api/executed', page, PAGE_SIZE, renderExecutedTable);
+    }
+
+    // 通用分页加载
+    const PAGE_SIZE = 20;
+
+    /**
+     * 更新数据总数文案。
+     * @param {string} elId - 目标元素 ID。
+     * @param {string} i18nKey - i18n 文案键。
+     * @param {number} count - 总数。
+     */
+    function updateCountText(elId, i18nKey, count) {
+      const el = document.getElementById(elId);
+      if (!el) return;
+      const safeCount = count === undefined || count === null ? 0 : count;
+      el.setAttribute('data-count', safeCount);
+      const langPack = i18n[currentLang];
+      if (langPack && langPack[i18nKey]) {
+        el.textContent = langPack[i18nKey].replace(/{count}/g, safeCount);
+      } else {
+        el.textContent = `Total: ${safeCount}`;
+      }
+    }
+
+    function loadSection(apiUrl, page, pageSize = PAGE_SIZE, renderFn) {
+      authFetch(`${apiUrl}?page=${page}&page_size=${pageSize}`)
+        .then(res => res.json())
+        .then(json => renderFn(json))
+        .catch(err => {
+          console.error('loadSection error', err);
+          if (err.message !== '未登录' && err.message !== '认证失败') {
+            // 只有非认证错误才显示错误信息
+          }
+        });
+    }
+
+    /**
+     * 初始化用户筛选器（默认为空，不设置日期）。
+     */
+    function initUserFilter() {
+      const start = document.getElementById('users-start');
+      const end = document.getElementById('users-end');
+      // 默认不设置日期，返回全量数据
+      if (start) start.value = '';
+      if (end) end.value = '';
+    }
+
+    /**
+     * 获取用户筛选参数。
+     * @returns {Object} start 和 end 的日期字符串
+     */
+    function getUserFilter() {
+      const start = document.getElementById('users-start')?.value || '';
+      const end = document.getElementById('users-end')?.value || '';
+      return { start, end };
+    }
+
+    /**
+     * 重置用户筛选（清空日期）并刷新。
+     */
+    function resetUserFilter() {
+      initUserFilter();
+      loadUsers(1);
+    }
+
+    /**
+     * 加载用户列表（支持日期筛选）。
+     * @param {number} page - 页码
+     */
+    function loadUsers(page = 1) {
+      const { start, end } = getUserFilter();
+      const params = new URLSearchParams({
+        page,
+        page_size: PAGE_SIZE
+      });
+      if (start) params.append('start_date', start);
+      if (end) params.append('end_date', end);
+      authFetch(`/api/users?${params.toString()}`)
+        .then(res => res.json())
+        .then(json => renderUsers(json))
+        .catch(err => {
+          console.error('loadUsers error', err);
+          if (err.message !== '未登录' && err.message !== '认证失败') {
+            // 只有非认证错误才显示错误信息
+          }
+        });
+    }
+
+    /**
+     * 初始化任务筛选器（默认为空，不设置日期和类型）。
+     */
+    function initTaskFilter() {
+      const type = document.getElementById('tasks-type');
+      const start = document.getElementById('tasks-start');
+      const end = document.getElementById('tasks-end');
+      // 默认不设置筛选条件，返回全量数据
+      if (type) type.value = '';
+      if (start) start.value = '';
+      if (end) end.value = '';
+    }
+
+    /**
+     * 获取任务筛选参数。
+     * @returns {Object} type、start 和 end 的筛选值
+     */
+    function getTaskFilter() {
+      const type = document.getElementById('tasks-type')?.value || '';
+      const start = document.getElementById('tasks-start')?.value || '';
+      const end = document.getElementById('tasks-end')?.value || '';
+      return { type, start, end };
+    }
+
+    /**
+     * 重置任务筛选（清空日期）并刷新。
+     */
+    function resetTaskFilter() {
+      initTaskFilter();
+      loadTasks(1);
+    }
+
+    /**
+     * 加载任务（支持任务类型和日期筛选）。
+     * @param {number} page - 页码
+     */
+    function loadTasks(page = 1) {
+      const { type, start, end } = getTaskFilter();
+      const params = new URLSearchParams({
+        page,
+        page_size: PAGE_SIZE
+      });
+      if (type) params.append('task_type', type);
+      if (start) params.append('start_date', start);
+      if (end) params.append('end_date', end);
+      authFetch(`/api/tasks?${params.toString()}`)
+        .then(res => res.json())
+        .then(json => renderTasks(json))
+        .catch(err => {
+          console.error('loadTasks error', err);
+          if (err.message !== '未登录' && err.message !== '认证失败') {
+            // 只有非认证错误才显示错误信息
+          }
+        });
+    }
+
+    /**
+     * 渲染用户列表并展示账号与密码。
+     * @param {Object} json - 用户列表数据，包含 data/page/total/page_size。
+     */
+    function renderUsers(json) {
+      const tbody = document.getElementById('users-tbody');
+      const pag = document.getElementById('users-pagination');
+      tbody.innerHTML = '';
+      const data = json.data || [];
+      
+      if (data.length === 0) {
+        const tr = document.createElement('tr');
+        const td = document.createElement('td');
+        td.colSpan = 5;
+        td.className = 'empty-state';
+        td.textContent = currentLang === 'zh' ? '暂无用户' : 'No users found';
+        tr.appendChild(td);
+        tbody.appendChild(tr);
+      } else {
+        data.forEach(u => {
+          // 转义特殊字符，避免 XSS
+          const safeEmail = (u.email || '').replace(/'/g, "&#39;").replace(/"/g, "&quot;");
+          const safeUsername = (u.username || '').replace(/'/g, "&#39;").replace(/"/g, "&quot;");
+          const safePassword = (u.password_plain || '').replace(/'/g, "&#39;").replace(/"/g, "&quot;");
+          const safeToken = (u.token || '').replace(/'/g, "&#39;").replace(/"/g, "&quot;");
+          const createdAt = u.created_at_str || '';
+          const status = u.status || '';
+          
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>${u.id === undefined || u.id === null ? '-' : u.id}</td>
+            <td class="user-account" title="${safeEmail || safeUsername || 'N/A'}">${safeEmail || safeUsername || 'N/A'}</td>
+            <td class="user-password">${safePassword || 'N/A'}</td>
+            <td>${createdAt}</td>
+            <td><span class="status-badge status-${(status || '').toLowerCase()}">${status}</span></td>
+            <td class="user-token" title="${safeToken || 'N/A'}">${safeToken || 'N/A'}</td>
+          `;
+          tbody.appendChild(tr);
+        });
+      }
+      
+      updateCountText('users-total', 'users.count', json.total || 0);
+      renderPagination(pag, json.page, Math.max(1, Math.ceil((json.total || 0) / (json.page_size || PAGE_SIZE))), 'users', json.page_size || PAGE_SIZE);
+    }
+
+    /**
+     * 任务类型映射为可读动作。
+     * @param {string} type - 任务类型标识。
+     * @returns {string} 可读的动作名称。
+     */
+    function mapTaskType(type) {
+      const map = {
+        register: '创建用户',
+        create_user: '创建用户',
+        checkin: '签到',
+        face_upload: '上传人脸',
+        makeup_creation: '创建妆造',
+        post_community: '发布到社区',
+        like_collect: '点赞收藏',
+        like_comment: '点赞评论',
+        follow_user: '关注用户',
+        collect_topic: '收藏话题',
+        login: '登录',
+        post: '发布',
+        makeup: '妆造',
+        beauty_flow: '美妆流程'
+      };
+      return map[type] || type || '';
+    }
+
+    /**
+     * 打开图片放大模态框
+     * @param {string} imageUrl - 图片URL
+     * @param {string} email - 用户邮箱
+     * @param {number} userId - 用户ID
+     */
+    function openImageModal(imageUrl, email, userId) {
+      const modal = document.getElementById('imageModal');
+      const modalImage = document.getElementById('modalImage');
+      const modalInfo = document.getElementById('modalImageInfo');
+      
+      modalImage.src = imageUrl;
+      modalInfo.innerHTML = `
+        <div><strong>用户ID:</strong> ${userId}</div>
+        <div><strong>邮箱:</strong> ${email}</div>
+        <div style="margin-top: 8px; opacity: 0.7; font-size: 12px;">点击任意位置关闭</div>
+      `;
+      
+      modal.classList.add('active');
+      document.body.style.overflow = 'hidden'; // 禁止背景滚动
+    }
+
+    /**
+     * 关闭图片放大模态框
+     */
+    function closeImageModal() {
+      const modal = document.getElementById('imageModal');
+      modal.classList.remove('active');
+      document.body.style.overflow = ''; // 恢复滚动
+    }
+
+    // ESC键关闭模态框
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        closeImageModal();
+      }
+    });
+
+    // 渲染任务表
+    function renderTasks(json) {
+      const tbody = document.getElementById('tasks-tbody');
+      const pag = document.getElementById('tasks-pagination');
+      tbody.innerHTML = '';
+      const data = json.data || [];
+      if (data.length === 0) {
+        const tr = document.createElement('tr');
+        const td = document.createElement('td');
+        td.colSpan = 6;
+        td.className = 'empty-state';
+        td.textContent = currentLang === 'zh' ? '今日暂无任务' : 'No tasks for today';
+        tr.appendChild(td);
+        tbody.appendChild(tr);
+      } else {
+        data.forEach(t => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>${t.id}</td>
+            <td>${mapTaskType(t.type)}</td>
+            <td>${t.user_id || ''}</td>
+            <td>${t.user_email || ''}</td>
+            <td>${t.scheduled_at_str || ''}</td>
+            <td><span class="status-badge status-${(t.status || '').toLowerCase()}">${t.status || ''}</span></td>
+            <td>${t.attempts || 0}</td>
+          `;
+          tbody.appendChild(tr);
+        });
+      }
+      renderPagination(pag, json.page, Math.max(1, Math.ceil((json.total || 0) / (json.page_size || PAGE_SIZE))), 'tasks', json.page_size || PAGE_SIZE);
+      updateCountText('tasks-total', 'tasks.count', json.total || 0);
+    }
+
+    // 渲染执行日志（表格分页）
+    function renderExecutedTable(json) {
+      const tbody = document.getElementById('executed-tbody');
+      const pag = document.getElementById('executed-pagination');
+      tbody.innerHTML = '';
+      const data = json.data || [];
+      if (data.length === 0) {
+        const tr = document.createElement('tr');
+        const td = document.createElement('td');
+        td.colSpan = 6;
+        td.className = 'empty-state';
+        td.textContent = currentLang === 'zh' ? '暂无任务记录' : 'No task records';
+        tr.appendChild(td);
+        tbody.appendChild(tr);
+      } else {
+        data.forEach(log => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>${log.user_id || ''}</td>
+            <td>${log.user_email || ''}</td>
+            <td>${log.action || ''}</td>
+            <td>${log.api_endpoint || ''}</td>
+            <td>${log.executed_at_str || ''}</td>
+            <td><span class="status-badge status-${(log.status || '').toLowerCase()}">${log.status || ''}</span></td>
+            <td>${(log.message || '').substring(0, 50)}</td>
+          `;
+          tbody.appendChild(tr);
+        });
+      }
+      updateCountText('executed-total', 'executed.count', json.total || 0);
+      renderPagination(pag, json.page, Math.max(1, Math.ceil((json.total || 0) / (json.page_size || PAGE_SIZE))), 'executed', json.page_size || PAGE_SIZE);
+    }
+
+    // 渲染分页组件
+    function renderPagination(container, page, totalPages, type, pageSize = PAGE_SIZE) {
+      if (!container) return;
+      container.innerHTML = '';
+      container.className = 'pagination';
+      const createLink = (text, targetPage, isActive = false) => {
+        const a = document.createElement('a');
+        a.href = 'javascript:void(0)';
+        a.textContent = text;
+        a.className = 'page-btn' + (isActive ? ' active' : '');
+        a.addEventListener('click', () => {
+          if (type === 'users') loadUsers(targetPage);
+          if (type === 'tasks') loadTasks(targetPage);
+          if (type === 'executed') loadSection('/api/executed', targetPage, pageSize, renderExecutedTable);
+        });
+        return a;
+      };
+      const spanInfo = document.createElement('span');
+      spanInfo.className = 'page-info';
+      spanInfo.textContent = `PAGE ${page} / ${totalPages}`;
+      container.appendChild(spanInfo);
+
+      if (page > 1) {
+        container.appendChild(createLink('«', page - 1));
+      }
+      for (let p = 1; p <= totalPages; p++) {
+        if (p === page) {
+          container.appendChild(createLink(String(p), p, true));
+        } else if (p === 1 || p === totalPages || (p >= page - 2 && p <= page + 2)) {
+          container.appendChild(createLink(String(p), p));
+        } else if (p === page - 3 || p === page + 3) {
+          const ell = document.createElement('span');
+          ell.className = 'ellipsis';
+          ell.textContent = '...';
+          container.appendChild(ell);
+        }
+      }
+      if (page < totalPages) {
+        container.appendChild(createLink('»', page + 1));
+      }
+    }
+
+    /**
+     * 调用模块接口并显示结果
+     */
+    function callModule(url, title) {
+      const modal = document.getElementById('resultModal');
+      const modalTitle = document.getElementById('modalTitle');
+      const modalBody = document.getElementById('modalBody');
+      
+      modalTitle.textContent = title + ' - ' + (currentLang === 'zh' ? '执行中...' : 'Executing...');
+      modalBody.innerHTML = '<p>' + (currentLang === 'zh' ? '正在执行，请稍候...' : 'Processing, please wait...') + '</p>';
+      modal.style.display = 'block';
+
+      authFetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        timeout: 300000  // 5分钟超时（对于创建妆容等长时间任务）
+      })
+        .then(async response => {
+          // 检查响应状态
+          if (!response.ok) {
+            const text = await response.text();
+            throw new Error(`HTTP ${response.status}: ${text.substring(0, 200)}`);
+          }
+          // 检查内容类型
+          const contentType = response.headers.get('content-type');
+          if (contentType && !contentType.includes('application/json')) {
+            const text = await response.text();
+            throw new Error(`服务器返回了非JSON响应: ${text.substring(0, 200)}`);
+          }
+          // 尝试解析 JSON
+          try {
+            return await response.json();
+          } catch (jsonError) {
+            const text = await response.text();
+            throw new Error(`JSON解析失败: ${jsonError.message}. 响应内容: ${text.substring(0, 200)}`);
+          }
+        })
+        .then(data => {
+          modalTitle.textContent = title + ' - ' + (currentLang === 'zh' ? '执行结果' : 'Result');
+          let html = '';
+          
+          if (data.data) {
+            const result = data.data;
+            if (result.success) {
+              html += '<p class="result-success"><b>✓ ' + (currentLang === 'zh' ? '执行成功' : 'Execution Success') + '</b></p>';
+            } else {
+              html += '<p class="result-error"><b>✗ ' + (currentLang === 'zh' ? '执行失败' : 'Execution Failed') + '</b></p>';
+            }
+            
+            if (result.user_id) {
+              html += '<p><b>' + (currentLang === 'zh' ? '用户ID:' : 'User ID:') + '</b> ' + result.user_id + '</p>';
+            }
+            if (result.makeup_id) {
+              html += '<p><b>' + (currentLang === 'zh' ? '妆造ID:' : 'Makeup ID:') + '</b> ' + result.makeup_id + '</p>';
+            }
+            if (result.post_id) {
+              html += '<p><b>' + (currentLang === 'zh' ? '动态ID:' : 'Post ID:') + '</b> ' + result.post_id + '</p>';
+            }
+            if (result.target_user_id) {
+              html += '<p><b>' + (currentLang === 'zh' ? '目标用户ID:' : 'Target User ID:') + '</b> ' + result.target_user_id + '</p>';
+            }
+            if (result.topic_id) {
+              html += '<p><b>' + (currentLang === 'zh' ? '话题ID:' : 'Topic ID:') + '</b> ' + result.topic_id + '</p>';
+            }
+            
+            if (result.warnings && result.warnings.length > 0) {
+              html += '<p class="result-warning"><b>' + (currentLang === 'zh' ? '警告:' : 'Warnings:') + '</b></p><ul>';
+              result.warnings.forEach(w => {
+                html += '<li>' + w + '</li>';
+              });
+              html += '</ul>';
+            }
+            
+            if (result.error) {
+              html += '<p class="result-error"><b>' + (currentLang === 'zh' ? '错误:' : 'Error:') + '</b></p>';
+              html += '<pre>' + JSON.stringify(result.error, null, 2) + '</pre>';
+            }
+            
+            if (result.debug) {
+              html += '<p><b>' + (currentLang === 'zh' ? '调试信息:' : 'Debug Info:') + '</b></p>';
+              html += '<pre>' + JSON.stringify(result.debug, null, 2) + '</pre>';
+            }
+            
+            html += '<p><b>' + (currentLang === 'zh' ? '完整响应:' : 'Full Response:') + '</b></p>';
+            html += '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
+          } else {
+            html += '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
+          }
+          
+          modalBody.innerHTML = html;
+        })
+        .catch(error => {
+          modalTitle.textContent = title + ' - ' + (currentLang === 'zh' ? '错误' : 'Error');
+          modalBody.innerHTML = '<p class="result-error"><b>' + (currentLang === 'zh' ? '请求失败:' : 'Request Failed:') + '</b> ' + error.message + '</p>';
+        });
+    }
+
+    /**
+     * 关闭模态框
+     */
+    function closeModal() {
+      document.getElementById('resultModal').style.display = 'none';
+    }
+
+    // 点击模态框外部关闭
+    window.onclick = function(event) {
+      const modal = document.getElementById('resultModal');
+      if (event.target == modal) {
+        closeModal();
+      }
+    }
+    
+    // 页面加载时自动加载任务进度
+    window.addEventListener('DOMContentLoaded', () => {
+      loadTaskProgress();
+    });
+  </script>
+</body>
+</html>
+

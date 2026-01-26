@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>用户时间轴 - Makeup Bot</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    :root {
+      --bg-primary: #000000;
+      --bg-secondary: #0a0a0a;
+      --bg-card: #1a1a1a;
+      --text-primary: #ffffff;
+      --text-secondary: #a0a0a0;
+      --accent-cyan: #00ffff;
+      --accent-purple: #ff00ff;
+      --accent-green: #00ff00;
+      --accent-red: #ff0000;
+      --border-color: rgba(255, 255, 255, 0.1);
+      --shadow-glow: 0 0 20px rgba(0, 255, 255, 0.3);
+    }
+    
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+    
+    /* 顶部导航栏 */
+    .navbar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(0, 0, 0, 0.8);
+      backdrop-filter: blur(20px) saturate(180%);
+      border-bottom: 1px solid var(--border-color);
+      padding: 0 40px;
+      height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    
+    .navbar-brand {
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--text-primary);
+      text-decoration: none;
+      letter-spacing: -0.5px;
+    }
+    
+    .navbar-actions {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+    
+    .btn-back {
+      padding: 8px 16px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      color: var(--text-primary);
+      border-radius: 8px;
+      text-decoration: none;
+      font-size: 14px;
+      transition: all 0.2s;
+    }
+    
+    .btn-back:hover {
+      border-color: var(--accent-cyan);
+      background: rgba(0, 255, 255, 0.05);
+    }
+    
+    /* 主容器 */
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 60px 40px;
+    }
+    
+    /* 标题区域 */
+    .hero-section {
+      margin-bottom: 40px;
+    }
+    
+    .hero-title {
+      font-size: 40px;
+      font-weight: 700;
+      letter-spacing: -1.5px;
+      margin-bottom: 8px;
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    
+    .hero-subtitle {
+      font-size: 16px;
+      color: var(--text-secondary);
+      font-weight: 400;
+    }
+    
+    .section-title {
+      font-size: 32px;
+      font-weight: 600;
+      margin-bottom: 24px;
+      letter-spacing: -1px;
+    }
+    
+    /* 表格样式 */
+    .data-table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    
+    .data-table thead {
+      background: rgba(255, 255, 255, 0.03);
+    }
+    
+    .data-table th {
+      padding: 16px 20px;
+      text-align: left;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 1px solid var(--border-color);
+    }
+    
+    .data-table td {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border-color);
+      color: var(--text-primary);
+      font-size: 14px;
+    }
+    
+    .data-table tbody tr:last-child td {
+      border-bottom: none;
+    }
+    
+    .data-table tbody tr:hover {
+      background: rgba(255, 255, 255, 0.02);
+    }
+    
+    .data-table a {
+      color: var(--accent-cyan);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+    
+    .data-table a:hover {
+      color: var(--accent-purple);
+    }
+    
+    /* 状态标签 */
+    .status-badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      text-transform: uppercase;
+    }
+    
+    .status-pending {
+      background: rgba(255, 165, 0, 0.15);
+      color: #ffaa00;
+    }
+    
+    .status-completed {
+      background: rgba(0, 255, 0, 0.15);
+      color: var(--accent-green);
+    }
+    
+    .status-failed {
+      background: rgba(255, 0, 0, 0.15);
+      color: var(--accent-red);
+    }
+    
+    .status-active {
+      background: rgba(0, 255, 255, 0.15);
+      color: var(--accent-cyan);
+    }
+    
+    /* 空状态 */
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--text-secondary);
+    }
+    
+    .empty-state-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+      opacity: 0.5;
+    }
+    
+    /* 滚动条 */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    
+    ::-webkit-scrollbar-track {
+      background: var(--bg-secondary);
+    }
+    
+    ::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 4px;
+    }
+    
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(255, 255, 255, 0.3);
+    }
+    
+    /* 响应式 */
+    @media (max-width: 768px) {
+      .container {
+        padding: 40px 20px;
+      }
+      
+      .hero-title {
+        font-size: 28px;
+      }
+      
+      .data-table {
+        font-size: 12px;
+      }
+      
+      .data-table th,
+      .data-table td {
+        padding: 12px 8px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- 导航栏 -->
+  <nav class="navbar">
+    <a href="/" class="navbar-brand">Makeup Bot</a>
+    <div class="navbar-actions">
+      <a href="/" class="btn-back">← 返回首页</a>
+    </div>
+  </nav>
+
+  <div class="container">
+    <!-- 标题区域 -->
+    <div class="hero-section">
+      <h1 class="hero-title">用户时间轴</h1>
+      <p class="hero-subtitle">{{ user.email if user else '' }}</p>
+    </div>
+
+    <!-- 数据表格 -->
+    <div class="data-section">
+      {% if logs|length > 0 %}
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>动作</th>
+            <th>接口</th>
+            <th>计划时间</th>
+            <th>执行时间</th>
+            <th>状态</th>
+            <th>信息</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for log in logs %}
+          <tr>
+            <td>{{ log.action }}</td>
+            <td><code style="color: var(--accent-cyan);">{{ log.api_endpoint }}</code></td>
+            <td>{{ log.scheduled_at_str }}</td>
+            <td>{{ log.executed_at_str }}</td>
+            <td><span class="status-badge status-{{ log.status.lower() }}">{{ log.status }}</span></td>
+            <td style="max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ log.message }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <div class="empty-state">
+        <div class="empty-state-icon">📋</div>
+        <div>暂无执行记录</div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</body>
+</html>
+

@@ -1,0 +1,1124 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>用户头像配置 - Makeup Bot</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    :root {
+      --bg-primary: #000000;
+      --bg-secondary: #0a0a0a;
+      --bg-card: #1a1a1a;
+      --text-primary: #ffffff;
+      --text-secondary: #a0a0a0;
+      --accent-cyan: #00ffff;
+      --accent-purple: #ff00ff;
+      --accent-green: #00ff00;
+      --accent-red: #ff0000;
+      --border-color: rgba(255, 255, 255, 0.1);
+      --shadow-glow: 0 0 20px rgba(0, 255, 255, 0.3);
+    }
+    
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+    
+    /* 顶部导航栏 */
+    .navbar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(0, 0, 0, 0.8);
+      backdrop-filter: blur(20px) saturate(180%);
+      border-bottom: 1px solid var(--border-color);
+      padding: 0 40px;
+      height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    
+    .navbar-brand {
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--text-primary);
+      text-decoration: none;
+      letter-spacing: -0.5px;
+    }
+    
+    .navbar-actions {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+    
+    .btn-back {
+      padding: 8px 16px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      color: var(--text-primary);
+      border-radius: 8px;
+      text-decoration: none;
+      font-size: 14px;
+      transition: all 0.2s;
+    }
+    
+    .btn-back:hover {
+      border-color: var(--accent-cyan);
+      background: rgba(0, 255, 255, 0.05);
+    }
+    
+    /* 主容器 */
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 60px 40px;
+    }
+    
+    /* 标题区域 */
+    .hero-section {
+      margin-bottom: 40px;
+    }
+    
+    .hero-title {
+      font-size: 40px;
+      font-weight: 700;
+      letter-spacing: -1.5px;
+      margin-bottom: 8px;
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    
+    .hero-subtitle {
+      font-size: 16px;
+      color: var(--text-secondary);
+      font-weight: 400;
+    }
+    
+    .section-title {
+      font-size: 32px;
+      font-weight: 600;
+      margin-bottom: 24px;
+      letter-spacing: -1px;
+    }
+    
+    /* 上传区域 */
+    .upload-section {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 30px;
+      margin-bottom: 40px;
+    }
+    
+    .upload-area {
+      border: 2px dashed var(--border-color);
+      border-radius: 12px;
+      padding: 40px 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.3s;
+      margin-bottom: 20px;
+    }
+    
+    .upload-area:hover,
+    .upload-area.dragover {
+      border-color: var(--accent-cyan);
+      background: rgba(0, 255, 255, 0.05);
+    }
+    
+    .upload-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+    }
+    
+    .upload-text {
+      font-size: 18px;
+      color: var(--text-primary);
+      margin-bottom: 8px;
+    }
+    
+    .upload-hint {
+      font-size: 14px;
+      color: var(--text-secondary);
+    }
+    
+    .file-input {
+      display: none;
+    }
+    
+    /* 按钮样式 */
+    .btn-primary {
+      padding: 12px 24px;
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+      color: #000;
+      border: none;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-glow);
+    }
+    
+    .btn-primary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+    
+    /* 预览区域 */
+    .preview-section {
+      margin-top: 20px;
+      display: none;
+    }
+    
+    .preview-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 16px;
+      margin-top: 16px;
+    }
+    
+    .preview-item {
+      position: relative;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      overflow: hidden;
+      background: var(--bg-secondary);
+    }
+    
+    .preview-item img {
+      width: 100%;
+      height: 150px;
+      object-fit: cover;
+      display: block;
+    }
+    
+    .preview-item .preview-name {
+      padding: 8px;
+      font-size: 12px;
+      color: var(--text-secondary);
+      word-break: break-all;
+      text-overflow: ellipsis;
+      overflow: hidden;
+      white-space: nowrap;
+    }
+    
+    .preview-item .preview-remove {
+      position: absolute;
+      top: 4px;
+      right: 4px;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: rgba(255, 0, 0, 0.8);
+      border: none;
+      color: white;
+      cursor: pointer;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+    }
+    
+    .preview-item .preview-remove:hover {
+      background: rgba(255, 0, 0, 1);
+      transform: scale(1.1);
+    }
+    
+    /* 图片网格（缩略图） */
+    .images-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 14px;
+      margin-bottom: 30px;
+    }
+    
+    .image-card {
+      position: relative;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      overflow: hidden;
+      transition: all 0.25s;
+      cursor: pointer;
+      min-height: 150px;
+    }
+    
+    .image-card:hover {
+      border-color: var(--accent-cyan);
+      transform: translateY(-3px);
+      box-shadow: var(--shadow-glow);
+    }
+    
+    .image-preview {
+      width: 100%;
+      height: 150px;
+      object-fit: cover;
+      background: var(--bg-secondary);
+      display: block;
+    }
+    
+    /* 隐藏原有信息展示，保持简洁 */
+    .image-info,
+    .image-url,
+    .image-meta {
+      display: none;
+    }
+    
+    .image-actions {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      display: flex;
+      gap: 6px;
+    }
+    
+    .btn-danger {
+      width: 28px;
+      height: 28px;
+      padding: 0;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      color: var(--text-secondary);
+      border-radius: 50%;
+      font-size: 16px;
+      font-weight: 300;
+      cursor: pointer;
+      transition: all 0.3s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      line-height: 1;
+      opacity: 0.5;
+      backdrop-filter: blur(10px);
+    }
+    
+    .image-card:hover .btn-danger {
+      opacity: 0.8;
+    }
+    
+    .btn-danger:hover {
+      background: rgba(255, 0, 0, 0.15);
+      border-color: rgba(255, 0, 0, 0.4);
+      color: var(--accent-red);
+      opacity: 1;
+      transform: scale(1.1);
+      box-shadow: 0 2px 8px rgba(255, 0, 0, 0.2);
+    }
+    
+    .btn-danger:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+    
+    /* 分页 */
+    .pagination {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin: 24px 0;
+      padding: 10px 14px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      font-family: 'Inter', sans-serif;
+      font-size: 13px;
+      color: var(--text-secondary);
+      width: 100%;
+      justify-content: center;
+    }
+    
+    .pagination .page-info {
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+    
+    .pagination .page-btn {
+      min-width: 34px;
+      padding: 6px 10px;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+      background: var(--bg-card);
+      color: var(--text-primary);
+      text-decoration: none;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-weight: 600;
+    }
+    
+    .pagination .page-btn:hover {
+      border-color: var(--accent-cyan);
+      box-shadow: var(--shadow-glow);
+    }
+    
+    .pagination .page-btn.active {
+      border-color: var(--accent-cyan);
+      background: rgba(0, 255, 255, 0.1);
+      color: var(--text-primary);
+      box-shadow: var(--shadow-glow);
+    }
+    
+    .pagination .ellipsis {
+      color: var(--text-secondary);
+      padding: 0 4px;
+    }
+    
+    /* 消息提示 */
+    .message {
+      padding: 16px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      display: none;
+    }
+    
+    .message-success {
+      background: rgba(0, 255, 0, 0.1);
+      border: 1px solid rgba(0, 255, 0, 0.3);
+      color: var(--accent-green);
+    }
+    
+    .message-error {
+      background: rgba(255, 0, 0, 0.1);
+      border: 1px solid rgba(255, 0, 0, 0.3);
+      color: var(--accent-red);
+    }
+    
+    /* 空状态 */
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--text-secondary);
+    }
+    
+    .empty-state-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+      opacity: 0.5;
+    }
+    
+    /* 滚动条 */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    
+    ::-webkit-scrollbar-track {
+      background: var(--bg-secondary);
+    }
+    
+    ::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 4px;
+    }
+    
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(255, 255, 255, 0.3);
+    }
+    
+    /* 图片放大模态框 */
+    .img-modal {
+      display: none;
+      position: fixed;
+      z-index: 9999;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.92);
+      backdrop-filter: blur(12px);
+      cursor: pointer;
+      opacity: 0;
+      transition: opacity 0.3s ease-out;
+    }
+    
+    .img-modal.active {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 1;
+    }
+    
+    .img-modal img {
+      max-width: 90vw;
+      max-height: 90vh;
+      object-fit: contain;
+      border-radius: 12px;
+      box-shadow: 0 25px 80px rgba(0, 0, 0, 0.8);
+      cursor: default;
+      animation: modalZoomIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+      transform-origin: center center;
+    }
+    
+    @keyframes modalZoomIn {
+      0% {
+        transform: scale(0.5);
+        opacity: 0;
+      }
+      50% {
+        transform: scale(1.05);
+      }
+      100% {
+        transform: scale(1);
+        opacity: 1;
+      }
+    }
+    
+    .img-modal.closing img {
+      animation: modalZoomOut 0.3s cubic-bezier(0.55, 0.055, 0.675, 0.19);
+    }
+    
+    @keyframes modalZoomOut {
+      0% {
+        transform: scale(1);
+        opacity: 1;
+      }
+      100% {
+        transform: scale(0.5);
+        opacity: 0;
+      }
+    }
+    
+    .img-modal-close {
+      position: absolute;
+      top: 30px;
+      right: 40px;
+      color: #fff;
+      font-size: 42px;
+      font-weight: 300;
+      cursor: pointer;
+      transition: all 0.3s;
+      z-index: 10000;
+      width: 50px;
+      height: 50px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      background: rgba(0, 0, 0, 0.5);
+      backdrop-filter: blur(10px);
+      border: 2px solid rgba(255, 255, 255, 0.2);
+      line-height: 1;
+      opacity: 0;
+      animation: fadeInDelay 0.4s ease-out 0.2s forwards;
+    }
+    
+    @keyframes fadeInDelay {
+      to {
+        opacity: 1;
+      }
+    }
+    
+    .img-modal.active .img-modal-close {
+      opacity: 1;
+    }
+    
+    .img-modal-close:hover {
+      background: rgba(255, 0, 0, 0.8);
+      border-color: rgba(255, 0, 0, 0.8);
+      transform: rotate(90deg) scale(1.1);
+    }
+    
+    /* 响应式 */
+    @media (max-width: 768px) {
+      .container {
+        padding: 40px 20px;
+      }
+      
+      .hero-title {
+        font-size: 28px;
+      }
+      
+      .images-grid {
+        grid-template-columns: 1fr;
+      }
+      
+      .img-modal-close {
+        top: 20px;
+        right: 20px;
+        width: 40px;
+        height: 40px;
+        font-size: 32px;
+      }
+      
+      .img-modal img {
+        max-width: 95vw;
+        max-height: 85vh;
+        border-radius: 8px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- 导航栏 -->
+  <nav class="navbar">
+    <a href="/" class="navbar-brand">Makeup Bot</a>
+    <div class="navbar-actions">
+      <a href="/" class="btn-back">← 返回首页</a>
+    </div>
+  </nav>
+
+  <div class="container">
+    <!-- 标题区域 -->
+    <div class="hero-section">
+      <h1 class="hero-title">用户头像配置</h1>
+      <p class="hero-subtitle">用户头像图片库 - 查看和配置头像</p>
+    </div>
+
+    <!-- 消息提示 -->
+    <div id="message" class="message"></div>
+
+    <!-- 图片列表 -->
+    <div style="margin-bottom: 40px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+        <button class="btn-primary" onclick="loadImages(1)" style="padding: 8px 16px; font-size: 14px;">🔄 刷新</button>
+        <span id="imagesTotal" style="color: var(--text-secondary); font-size: 14px;">总计: 0 张</span>
+      </div>
+
+      <div class="images-grid" id="imagesGrid">
+        <div class="empty-state">
+          <div class="empty-state-icon">🖼️</div>
+          <div>加载中...</div>
+        </div>
+      </div>
+
+      <!-- 分页 -->
+      <div class="pagination" id="imagesPagination"></div>
+    </div>
+
+    <!-- 用户头像配置（上传区域） -->
+    <div class="upload-section">
+      <h2 class="section-title" style="font-size: 24px; margin-bottom: 20px;">用户头像配置</h2>
+      <div class="upload-area" id="uploadArea">
+        <div class="upload-icon">📤</div>
+        <div class="upload-text">点击选择文件或拖拽图片到此处</div>
+        <div class="upload-hint">支持 JPG、PNG、WEBP 等图片格式</div>
+        <input type="file" id="fileInput" class="file-input" accept="image/*" multiple>
+      </div>
+      <div style="text-align: center;">
+        <button class="btn-primary" onclick="document.getElementById('fileInput').click()">
+          选择文件
+        </button>
+        <button class="btn-primary" id="uploadBtn" onclick="uploadFiles()" disabled>
+          开始上传
+        </button>
+      </div>
+      
+      <!-- 预览区域 -->
+      <div class="preview-section" id="previewSection">
+        <h3 style="font-size: 18px; margin-bottom: 12px; color: var(--text-primary);">已选择的图片 (共 <span id="fileCount">0</span> 张)</h3>
+        <div class="preview-grid" id="previewGrid"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 图片放大模态框 -->
+  <div class="img-modal" id="imgModal" onclick="closeImgModal(event)">
+    <span class="img-modal-close" onclick="closeImgModal(event)">&times;</span>
+    <img id="imgModalContent" src="" alt="preview" onclick="event.stopPropagation()">
+  </div>
+
+  <script>
+    let selectedFiles = [];
+    const IMAGES_PAGE_SIZE = 20;
+
+    // 加载图片列表
+    function loadImages(page = 1) {
+      fetch(`/api/images?page=${page}&page_size=${IMAGES_PAGE_SIZE}`)
+        .then(res => res.json())
+        .then(json => renderImages(json))
+        .catch(err => {
+          console.error('loadImages error', err);
+          showMessage('加载图片列表失败', 'error');
+        });
+    }
+
+    // 渲染图片列表
+    function renderImages(json) {
+      const grid = document.getElementById('imagesGrid');
+      const totalSpan = document.getElementById('imagesTotal');
+      const pag = document.getElementById('imagesPagination');
+      
+      const data = json.data || [];
+      const total = json.total || 0;
+      const page = json.page || 1;
+      const totalPages = Math.max(1, Math.ceil(total / IMAGES_PAGE_SIZE));
+      
+      // 更新总计
+      totalSpan.textContent = `总计: ${total} 张`;
+      
+      // 清空网格
+      grid.innerHTML = '';
+      
+      if (data.length === 0) {
+        const emptyDiv = document.createElement('div');
+        emptyDiv.className = 'empty-state';
+        emptyDiv.innerHTML = `
+          <div class="empty-state-icon">🖼️</div>
+          <div>暂无图片，请先上传</div>
+        `;
+        grid.appendChild(emptyDiv);
+      } else {
+        data.forEach(img => {
+          const card = document.createElement('div');
+          card.className = 'image-card';
+          card.setAttribute('data-id', img.id);
+          card.setAttribute('data-url', img.url);
+          
+          // 转义 URL 防止 XSS
+          const safeUrl = (img.url || '').replace(/'/g, "&#39;").replace(/"/g, "&quot;");
+          
+          card.innerHTML = `
+            <img src="${safeUrl}" 
+                 alt="image-${img.id}" 
+                 class="image-preview" 
+                 data-url="${safeUrl}"
+                 onerror="this.src='data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'200\' height=\'200\'%3E%3Crect fill=\'%231a1a1a\' width=\'200\' height=\'200\'/%3E%3Ctext fill=\'%23a0a0a0\' font-family=\'sans-serif\' font-size=\'14\' x=\'50%25\' y=\'50%25\' text-anchor=\'middle\' dominant-baseline=\'middle\'%3E图片加载失败%3C/text%3E%3C/svg%3E'">
+            <div class="image-actions">
+              <button class="btn-danger" data-id="${img.id}" title="删除">×</button>
+            </div>
+          `;
+          
+          grid.appendChild(card);
+        });
+        
+        // 绑定事件
+        bindImageEvents();
+      }
+      
+      // 渲染分页
+      renderImagesPagination(pag, page, totalPages);
+      
+      // 更新 URL 但不刷新页面
+      const url = new URL(window.location);
+      url.searchParams.set('page', page);
+      window.history.replaceState({}, '', url);
+    }
+
+    // 绑定图片卡片事件
+    function bindImageEvents() {
+      const cards = document.querySelectorAll('.image-card');
+      cards.forEach(card => {
+        const url = card.getAttribute('data-url');
+        // 点击卡片放大图片
+        card.addEventListener('click', (e) => {
+          // 如果点击的是删除按钮，不触发放大
+          if (e.target.classList.contains('btn-danger')) {
+            return;
+          }
+          openImgModal(url);
+        });
+        
+        // 删除按钮
+        const delBtn = card.querySelector('.btn-danger');
+        if (delBtn) {
+          delBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const id = delBtn.getAttribute('data-id');
+            deleteImage(parseInt(id), delBtn);
+          });
+        }
+      });
+    }
+
+    // 渲染图片分页
+    function renderImagesPagination(container, page, totalPages) {
+      if (!container) return;
+      container.innerHTML = '';
+      container.className = 'pagination';
+      
+      if (totalPages <= 1) {
+        container.innerHTML = `<span>第 ${page} / ${totalPages} 页</span>`;
+        return;
+      }
+      
+      const createLink = (text, targetPage, isActive = false) => {
+        const a = document.createElement('a');
+        a.href = 'javascript:void(0)';
+        a.textContent = text;
+        a.className = 'page-btn' + (isActive ? ' active' : '');
+        a.addEventListener('click', () => {
+          loadImages(targetPage);
+        });
+        return a;
+      };
+      
+      // 添加页面信息
+      const pageInfo = document.createElement('span');
+      pageInfo.className = 'page-info';
+      pageInfo.textContent = `第 ${page} / ${totalPages} 页`;
+      container.appendChild(pageInfo);
+      
+      // 上一页
+      if (page > 1) {
+        container.appendChild(createLink('« 上一页', page - 1));
+      }
+      
+      // 页码按钮
+      const maxVisible = 5;
+      let start = Math.max(1, page - Math.floor(maxVisible / 2));
+      let end = Math.min(totalPages, start + maxVisible - 1);
+      
+      if (end - start < maxVisible - 1) {
+        start = Math.max(1, end - maxVisible + 1);
+      }
+      
+      if (start > 1) {
+        container.appendChild(createLink('1', 1));
+        if (start > 2) {
+          const ellipsis = document.createElement('span');
+          ellipsis.className = 'ellipsis';
+          ellipsis.textContent = '...';
+          container.appendChild(ellipsis);
+        }
+      }
+      
+      for (let p = start; p <= end; p++) {
+        container.appendChild(createLink(p.toString(), p, p === page));
+      }
+      
+      if (end < totalPages) {
+        if (end < totalPages - 1) {
+          const ellipsis = document.createElement('span');
+          ellipsis.className = 'ellipsis';
+          ellipsis.textContent = '...';
+          container.appendChild(ellipsis);
+        }
+        container.appendChild(createLink(totalPages.toString(), totalPages));
+      }
+      
+      // 下一页
+      if (page < totalPages) {
+        container.appendChild(createLink('下一页 »', page + 1));
+      }
+    }
+
+    // 等待 DOM 加载完成
+    document.addEventListener('DOMContentLoaded', function() {
+      // 从 URL 参数获取当前页码，默认第1页
+      const urlParams = new URLSearchParams(window.location.search);
+      const initialPage = parseInt(urlParams.get('page')) || 1;
+      loadImages(initialPage);
+      
+      // 文件选择处理
+      const fileInput = document.getElementById('fileInput');
+      if (fileInput) {
+        fileInput.addEventListener('change', function(e) {
+          handleFiles(Array.from(e.target.files));
+        });
+      }
+
+      // 拖拽处理
+      const uploadArea = document.getElementById('uploadArea');
+      
+      if (uploadArea && fileInput) {
+        // 点击上传区域时触发文件选择
+        uploadArea.addEventListener('click', function(e) {
+          // 如果点击的是文件输入框本身或其子元素，不处理
+          if (e.target === fileInput || e.target.closest('input[type="file"]')) {
+            return;
+          }
+          // 阻止事件冒泡和默认行为
+          e.preventDefault();
+          e.stopPropagation();
+          // 触发文件选择对话框
+          fileInput.click();
+        });
+        
+        // 确保文件输入框的点击也能正常工作
+        fileInput.addEventListener('click', function(e) {
+          e.stopPropagation(); // 阻止冒泡到 uploadArea
+        });
+
+        // 拖拽处理
+        uploadArea.addEventListener('dragover', function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          uploadArea.classList.add('dragover');
+        });
+        
+        uploadArea.addEventListener('dragleave', function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          // 只有当鼠标真正离开上传区域时才移除样式
+          if (!uploadArea.contains(e.relatedTarget)) {
+            uploadArea.classList.remove('dragover');
+          }
+        });
+        
+        uploadArea.addEventListener('drop', function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          uploadArea.classList.remove('dragover');
+          const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+          if (files.length > 0) {
+            handleFiles(files);
+          }
+        });
+      }
+    });
+
+    function handleFiles(files) {
+      // 过滤出图片文件
+      const imageFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
+      if (imageFiles.length === 0) {
+        showMessage('请选择图片文件', 'error');
+        return;
+      }
+      
+      // 合并到已选择的文件列表（去重）
+      imageFiles.forEach(file => {
+        const exists = selectedFiles.find(f => f.name === file.name && f.size === file.size && f.lastModified === file.lastModified);
+        if (!exists) {
+          selectedFiles.push(file);
+        }
+      });
+      
+      updateUploadButton();
+      updatePreview();
+      if (imageFiles.length > 0) {
+        showMessage(`已选择 ${imageFiles.length} 个图片文件`, 'success');
+      }
+    }
+    
+    function updatePreview() {
+      const previewSection = document.getElementById('previewSection');
+      const previewGrid = document.getElementById('previewGrid');
+      const fileCount = document.getElementById('fileCount');
+      
+      if (selectedFiles.length === 0) {
+        previewSection.style.display = 'none';
+        return;
+      }
+      
+      previewSection.style.display = 'block';
+      fileCount.textContent = selectedFiles.length;
+      previewGrid.innerHTML = '';
+      
+      selectedFiles.forEach((file, index) => {
+        const previewItem = document.createElement('div');
+        previewItem.className = 'preview-item';
+        
+        const img = document.createElement('img');
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+        
+        const nameDiv = document.createElement('div');
+        nameDiv.className = 'preview-name';
+        nameDiv.textContent = file.name;
+        nameDiv.title = file.name;
+        
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'preview-remove';
+        removeBtn.textContent = '×';
+        removeBtn.onclick = () => {
+          selectedFiles.splice(index, 1);
+          updatePreview();
+          updateUploadButton();
+        };
+        
+        previewItem.appendChild(img);
+        previewItem.appendChild(nameDiv);
+        previewItem.appendChild(removeBtn);
+        previewGrid.appendChild(previewItem);
+      });
+    }
+    
+    function updateUploadButton() {
+      const uploadBtn = document.getElementById('uploadBtn');
+      uploadBtn.disabled = selectedFiles.length === 0;
+    }
+
+    async function uploadFiles() {
+      if (selectedFiles.length === 0) {
+        showMessage('请先选择要上传的图片', 'error');
+        return;
+      }
+      
+      const uploadBtn = document.getElementById('uploadBtn');
+      uploadBtn.disabled = true;
+      uploadBtn.textContent = `上传中... (0/${selectedFiles.length})`;
+      
+      let successCount = 0;
+      let failCount = 0;
+      const errors = [];
+
+      for (let i = 0; i < selectedFiles.length; i++) {
+        const file = selectedFiles[i];
+        uploadBtn.textContent = `上传中... (${i + 1}/${selectedFiles.length})`;
+        
+        try {
+          const formData = new FormData();
+          formData.append('file', file);
+          
+          const response = await fetch('/admin/images/upload', {
+            method: 'POST',
+            body: formData
+          });
+          
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
+          
+          const result = await response.json();
+          if (result.success) {
+            successCount++;
+          } else {
+            failCount++;
+            const errorMsg = result.error || '上传失败';
+            errors.push(`${file.name}: ${errorMsg}`);
+            console.error('Upload failed:', file.name, result);
+          }
+        } catch (error) {
+          failCount++;
+          errors.push(`${file.name}: ${error.message || '上传失败'}`);
+          console.error('Upload error:', file.name, error);
+        }
+      }
+
+      uploadBtn.disabled = false;
+      uploadBtn.textContent = '开始上传';
+      document.getElementById('fileInput').value = '';
+
+      if (successCount > 0) {
+        const message = `成功上传 ${successCount} 张图片${failCount > 0 ? `，失败 ${failCount} 张` : ''}`;
+        showMessage(message, failCount > 0 ? 'error' : 'success');
+        if (errors.length > 0) {
+          console.error('上传错误详情:', errors);
+        }
+        selectedFiles = [];
+        updatePreview();
+        updateUploadButton();
+        // 刷新图片列表
+        loadImages(1);
+      } else {
+        const errorMsg = `上传失败: ${failCount} 张图片${errors.length > 0 ? ' - ' + errors[0] : ''}`;
+        showMessage(errorMsg, 'error');
+        console.error('所有文件上传失败:', errors);
+      }
+    }
+
+    async function deleteImage(imageId, button) {
+      // 显示确认对话框
+      const confirmed = confirm('确定要删除这张图片吗？\n\n删除后无法恢复！');
+      if (!confirmed) {
+        return;
+      }
+
+      button.disabled = true;
+      button.style.opacity = '0.5';
+
+      try {
+        const response = await fetch(`/admin/images/${imageId}`, {
+          method: 'DELETE'
+        });
+        
+        const result = await response.json();
+        if (result.success) {
+          showMessage('图片已删除', 'success');
+          // 重新加载当前页
+          const currentPage = parseInt(new URLSearchParams(window.location.search).get('page')) || 1;
+          // 延迟一下，确保数据库操作完成
+          setTimeout(() => {
+            loadImages(currentPage);
+          }, 300);
+        } else {
+          throw new Error(result.error || '删除失败');
+        }
+      } catch (error) {
+        button.disabled = false;
+        button.style.opacity = '1';
+        showMessage('删除失败: ' + error.message, 'error');
+      }
+    }
+
+    function showMessage(text, type) {
+      const messageEl = document.getElementById('message');
+      messageEl.textContent = text;
+      messageEl.className = `message message-${type}`;
+      messageEl.style.display = 'block';
+      setTimeout(() => {
+        messageEl.style.display = 'none';
+      }, 3000);
+    }
+
+  /** 图片放大显示 */
+  function openImgModal(url) {
+    const modal = document.getElementById('imgModal');
+    const modalImg = document.getElementById('imgModalContent');
+    
+    // 重置图片样式
+    modalImg.style.transform = 'scale(1)';
+    modalImg.style.opacity = '1';
+    
+    // 设置图片源
+    modalImg.src = url;
+    
+    // 添加激活类，触发动画
+    modal.classList.remove('closing');
+    modal.classList.add('active');
+    document.body.style.overflow = 'hidden';
+  }
+  
+  function closeImgModal(event) {
+    // 如果点击的是图片本身，不关闭
+    if (event && event.target.id === 'imgModalContent') {
+      return;
+    }
+    
+    // 如果点击的是关闭按钮，阻止事件冒泡
+    if (event) {
+      event.stopPropagation();
+    }
+    
+    const modal = document.getElementById('imgModal');
+    const modalImg = document.getElementById('imgModalContent');
+    
+    // 添加关闭动画类
+    modal.classList.add('closing');
+    
+    // 等待动画完成后关闭
+    setTimeout(() => {
+      modal.classList.remove('active', 'closing');
+      document.body.style.overflow = '';
+      // 清除图片源，避免在下次打开时显示旧图片
+      modalImg.src = '';
+    }, 300);
+  }
+  
+  // ESC 关闭
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+      closeImgModal();
+    }
+  });
+  </script>
+</body>
+</html>
+
