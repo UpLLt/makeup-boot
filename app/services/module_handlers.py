@@ -13,6 +13,33 @@ def beijing_now() -> datetime:
     """获取当前北京时间（timezone-aware）。"""
     return datetime.now(BEIJING_TZ)
 
+
+def _feed_item_sort_key(item: Any) -> tuple[int, int]:
+    """
+    用于社区动态排序：优先今日发布，其次本周发布，最后更早的。
+    Returns (priority, -created_at) 其中 priority 0=今日 1=本周 2=更早，created_at 取负使新的靠前。
+    """
+    now = beijing_now()
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    week_start = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
+    today_ts = int(today_start.timestamp())
+    week_ts = int(week_start.timestamp())
+    created_at = None
+    if isinstance(item, dict):
+        created_at = item.get("created_at")
+    if created_at is None:
+        return (2, 0)
+    try:
+        ts = int(created_at) if not isinstance(created_at, (int, float)) else int(created_at)
+    except (TypeError, ValueError):
+        return (2, 0)
+    if ts >= today_ts:
+        return (0, -ts)  # 今日
+    if ts >= week_ts:
+        return (1, -ts)  # 本周
+    return (2, -ts)  # 更早
+
+
 from app.clients.makeup_api import MakeupApiClient
 from app.models import UserActivityLog, User, PostedMakeup
 from app.services.token_manager import get_valid_token, refresh_token
@@ -1136,8 +1163,9 @@ def handle_like_collect(session: Session) -> Dict[str, Any]:
             )
 
         # 获取100条动态列表（社区动态流）- 使用通用 API 包装器
-        print(f"[LikeCollect] Getting community feed (100 items) to find posts...")
-        feed_params = {"page": 1, "size": 100}
+        # sort_by=time 按发布时间排序，优先获取最新的
+        print(f"[LikeCollect] Getting community feed (100 items, sort_by=time) to find posts...")
+        feed_params = {"page": 1, "size": 100, "sort_by": "time"}
         feed_resp = api.call(client.get_community_feed, feed_params, api_name="get_community_feed")
         token = api.token  # 获取可能更新后的 token
         print(f"[LikeCollect] feed response: {feed_resp}")
@@ -1195,11 +1223,19 @@ def handle_like_collect(session: Session) -> Dict[str, Any]:
                 print(f"[LikeCollect] Filtered to {len(other_users_items)} posts from other users (excluding own)")
                 
                 if len(other_users_items) > 0:
-                    # 直接在“其他用户的所有动态”中随机挑选，避免总是命中同一条（不再限制为当天）
-                    # 更严格但更鲁棒：多尝试几条动态，直到找到能解析出 makeup_id 的
-                    max_try = min(10, len(other_users_items))
-                    candidates = list(other_users_items)
-                    random.shuffle(candidates)
+                    # 优先今日发布、其次本周发布，再更早的；同组内随机打乱避免总命中同一条
+                    other_users_items.sort(key=_feed_item_sort_key)
+                    by_priority: Dict[int, list] = {0: [], 1: [], 2: []}
+                    for x in other_users_items:
+                        if not isinstance(x, dict):
+                            continue
+                        p = _feed_item_sort_key(x)[0]
+                        by_priority.setdefault(p, []).append(x)
+                    for p in (0, 1, 2):
+                        random.shuffle(by_priority.get(p, []))
+                    candidates = by_priority.get(0, []) + by_priority.get(1, []) + by_priority.get(2, [])
+                    print(f"[LikeCollect] Priority: today={len(by_priority.get(0, []))}, this_week={len(by_priority.get(1, []))}, older={len(by_priority.get(2, []))}")
+                    max_try = min(10, len(candidates))
                     for candidate in candidates[:max_try]:
                         selected_item = candidate
                         selected_item_keys = list(candidate.keys()) if isinstance(candidate, dict) else []
