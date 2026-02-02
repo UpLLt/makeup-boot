@@ -13,7 +13,7 @@ from app.models import AdminSession
 
 # 硬编码的管理员账号密码
 ADMIN_USERNAME = "admin"
-ADMIN_PASSWORD_HASH = hashlib.sha256("admin123".encode("utf-8")).hexdigest()  # 默认密码: admin123
+ADMIN_PASSWORD_HASH = hashlib.sha256("]+iDZ?1B^53b~".encode("utf-8")).hexdigest()  # 管理员登录密码
 
 security = HTTPBearer(auto_error=False)
 
