@@ -172,6 +172,16 @@ class MakeupApiClient:
             error_text = resp.text[:500] if hasattr(resp, 'text') else str(exc)
             return {"code": "error", "message": f"Invalid JSON response: {error_text}"}
 
+    def get_user_info(self, token: str) -> Dict[str, Any]:
+        """获取当前用户信息."""
+        headers = {"Token": token}
+        resp = self._request("GET", "/api/users/info", headers=headers)
+        try:
+            return resp.json()
+        except Exception as exc:
+            error_text = resp.text[:500] if hasattr(resp, 'text') else str(exc)
+            return {"code": "error", "message": f"Invalid JSON response: {error_text}"}
+
     def update_user_info(self, token: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         """修改个人信息."""
         headers = {"Token": token}

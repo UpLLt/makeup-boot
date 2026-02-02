@@ -141,3 +141,41 @@ class PostedMakeup(SQLModel, table=True):
     created_at: datetime = Field(default_factory=beijing_now, index=True)  # 创建时间（北京时间）
     posted: bool = Field(default=False, index=True)  # 是否已发布
     posted_at: Optional[datetime] = Field(default=None, index=True)  # 发布时间
+
+
+class LikePool(SQLModel, table=True):
+    """点赞池表，存储可被点赞/评论的社区动态."""
+
+    __tablename__ = "like_pool"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    post_id: int = Field(index=True, unique=True)  # 社区动态 ID，唯一约束
+    makeup_id: Optional[int] = Field(default=None, index=True)  # 妆造 ID
+    author_user_id: int = Field(index=True)  # 发布该动态的用户 ID，消费时排除自己
+    published_at: datetime = Field(default_factory=beijing_now, index=True)  # 动态发布时间，用于时间分桶
+    like_count: int = Field(default=0)  # 当前点赞数，非今天桶优先选已有点赞的帖
+    created_at: datetime = Field(default_factory=beijing_now)  # 入库时间
+
+
+class UserLikedPost(SQLModel, table=True):
+    """用户已点赞记录表，避免重复点赞."""
+
+    __tablename__ = "user_liked_posts"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="users.id", index=True)  # 点赞用户 ID
+    post_id: int = Field(index=True)  # 动态 ID
+    liked_at: datetime = Field(default_factory=beijing_now)  # 点赞时间
+
+
+class UserLikedComment(SQLModel, table=True):
+    """用户已点赞的评论记录表，记录评论内容便于后续引用（如回复该评论）."""
+
+    __tablename__ = "user_liked_comments"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="users.id", index=True)  # 点赞用户 ID
+    comment_id: int = Field(index=True)  # 评论 ID
+    post_id: int = Field(index=True)  # 所属动态 ID
+    comment_content: Optional[str] = Field(default=None, sa_column=Column(Text))  # 评论内容，便于引用
+    liked_at: datetime = Field(default_factory=beijing_now)

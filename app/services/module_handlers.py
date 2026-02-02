@@ -1,7 +1,7 @@
 """模块处理函数。"""
 import random
 import json
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Iterable, Optional
 from datetime import datetime, timezone, timedelta
 from sqlmodel import Session, select
 
@@ -40,11 +40,167 @@ def _feed_item_sort_key(item: Any) -> tuple[int, int]:
     return (2, -ts)  # 更早
 
 
+from sqlmodel import func
+
 from app.clients.makeup_api import MakeupApiClient
-from app.models import UserActivityLog, User, PostedMakeup
+from app.models import UserActivityLog, User, PostedMakeup, LikePool, UserLikedComment, UserLikedPost
 from app.services.token_manager import get_valid_token, refresh_token
 from app.services.ai_text import generate_text
 from app.services.user_signup_flow import _pick_image_url
+
+# ============ 点赞池配置常量 ============
+LIKE_POOL_INJECT_PROBABILITY = 0.4  # 发布成功后注入池子的概率
+LIKE_POOL_DAILY_LIMIT = 100  # 今日池子上限
+# 时间桶概率权重（今天、昨天、本周、30天）
+LIKE_POOL_BUCKET_WEIGHTS = {
+    "today": 0.55,
+    "yesterday": 0.25,
+    "week": 0.15,
+    "month": 0.05,
+}
+
+
+def _pick_bucket_by_probability() -> str:
+    """
+    按概率随机选一个时间桶。
+    
+    @returns 时间桶名称: "today", "yesterday", "week", "month"
+    """
+    roll = random.random()
+    cumulative = 0.0
+    for bucket, weight in LIKE_POOL_BUCKET_WEIGHTS.items():
+        cumulative += weight
+        if roll < cumulative:
+            return bucket
+    return "today"  # 默认今天
+
+
+def _get_bucket_time_range(bucket: str) -> tuple[datetime, datetime]:
+    """
+    获取时间桶的时间范围（北京时间）。
+    
+    @param bucket - 时间桶名称
+    @returns (start_time, end_time) 左闭右开区间
+    """
+    now = beijing_now()
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    
+    if bucket == "today":
+        # 今天：今日 0 点至今
+        return (today_start, now + timedelta(seconds=1))
+    elif bucket == "yesterday":
+        # 昨天：昨日 0 点～今日 0 点前
+        yesterday_start = today_start - timedelta(days=1)
+        return (yesterday_start, today_start)
+    elif bucket == "week":
+        # 本周（2～7天前）
+        week_start = today_start - timedelta(days=7)
+        two_days_ago = today_start - timedelta(days=2)
+        return (week_start, two_days_ago)
+    elif bucket == "month":
+        # 30天（8～30天前）
+        month_start = today_start - timedelta(days=30)
+        week_ago = today_start - timedelta(days=8)
+        return (month_start, week_ago)
+    else:
+        # 默认今天
+        return (today_start, now + timedelta(seconds=1))
+
+
+def _pick_candidates_from_bucket(
+    session: Session,
+    liked_set: set[int],
+    bucket: str,
+    count: int,
+    exclude_post_ids: Optional[set[int]] = None,
+) -> list[LikePool]:
+    """在指定时间桶内选取候选帖子（排除已点赞 + 可选排除已试过的 post_id）。
+    
+    注意：允许用户点赞和评论自己的妆造，不排除自己的帖子。
+    """
+    start_time, end_time = _get_bucket_time_range(bucket)
+    query = (
+        select(LikePool)
+        .where(LikePool.published_at >= start_time)
+        .where(LikePool.published_at < end_time)
+    )
+    if liked_set:
+        query = query.where(LikePool.post_id.notin_(liked_set))
+    if exclude_post_ids:
+        query = query.where(LikePool.post_id.notin_(exclude_post_ids))
+    if bucket != "today":
+        query_with_likes = query.where(LikePool.like_count > 0).order_by(func.random())
+        candidates = list(session.exec(query_with_likes.limit(count * 2)).all())
+        if len(candidates) < count:
+            query_without_likes = query.where(LikePool.like_count == 0).order_by(func.random())
+            more = list(session.exec(query_without_likes.limit(count - len(candidates))).all())
+            candidates.extend(more)
+    else:
+        candidates = list(session.exec(query.order_by(func.random()).limit(count * 2)).all())
+    return candidates
+
+
+def pick_posts_from_pool(
+    session: Session,
+    current_user_id: int,
+    count: int = 1,
+    max_retries: int = 5,
+    exclude_post_ids: Optional[Iterable[int]] = None,
+) -> list[LikePool]:
+    """
+    从点赞池中选取帖子（公共函数）。
+    
+    逻辑：
+    1. 按概率随机选一个时间桶（今天/昨天/本周/30天）
+    2. 在该桶的池子里随机取，排除已点赞的帖子 + 可选排除已试过的 post_id
+    3. 非今天桶优先选已有点赞的帖（like_count > 0 优先）
+    4. 若该桶无可用候选，重试其他桶；最后按固定顺序试遍所有桶
+    注意：允许用户点赞和评论自己的妆造，不排除自己的帖子。
+    @param exclude_post_ids - 要排除的 post_id（如点赞评论时已试过无评论的帖）
+    """
+    liked_post_ids = session.exec(
+        select(UserLikedPost.post_id).where(UserLikedPost.user_id == current_user_id)
+    ).all()
+    liked_set = set(liked_post_ids) if liked_post_ids else set()
+    exclude_set = set(exclude_post_ids) if exclude_post_ids is not None else None
+
+    tried_buckets: set[str] = set()
+    bucket_order = ("today", "yesterday", "week", "month")
+
+    for _ in range(max_retries):
+        bucket = _pick_bucket_by_probability()
+        retry_count = 0
+        while bucket in tried_buckets and retry_count < 10:
+            bucket = _pick_bucket_by_probability()
+            retry_count += 1
+        tried_buckets.add(bucket)
+        candidates = _pick_candidates_from_bucket(
+            session, liked_set, bucket, count, exclude_post_ids=exclude_set
+        )
+        if candidates:
+            random.shuffle(candidates)
+            result = candidates[:count]
+            start_time, end_time = _get_bucket_time_range(bucket)
+            print(f"[LikePool] Picked {len(result)} posts from bucket '{bucket}' (range: {start_time} ~ {end_time})")
+            return result
+        print(f"[LikePool] Bucket '{bucket}' has no available posts, trying another bucket...")
+
+    # 随机桶都无候选时，按固定顺序试遍所有桶（避免数据全在 month 时因 month 概率仅 5% 而漏选）
+    for bucket in bucket_order:
+        if bucket in tried_buckets:
+            continue
+        candidates = _pick_candidates_from_bucket(
+            session, liked_set, bucket, count, exclude_post_ids=exclude_set
+        )
+        if candidates:
+            random.shuffle(candidates)
+            result = candidates[:count]
+            start_time, end_time = _get_bucket_time_range(bucket)
+            print(f"[LikePool] Picked {len(result)} posts from bucket '{bucket}' (fallback order)")
+            return result
+    print(f"[LikePool] No available posts in any bucket after {max_retries} retries + fallback")
+    return []
+
 
 client = MakeupApiClient()
 
@@ -69,6 +225,22 @@ def _filter_token_warnings(ws: list[str]) -> list[str]:
         if "Authorization error" in w_str and "10104" in w_str:
             continue
         filtered.append(w_str)
+    return filtered
+
+
+def _filter_like_comment_warnings(ws: list[str]) -> list[str]:
+    """点赞评论成功时过滤掉「某帖无评论」类告警，避免成功结果里仍显示多次尝试的 no comments。"""
+    base = _filter_token_warnings(ws)
+    filtered: list[str] = []
+    for w in base:
+        s = str(w).lower()
+        # 过滤所有包含 "no comments for post" 或 "like_comment attempt" + "no comments" 的警告
+        if "no comments for post" in s:
+            continue
+        if "like_comment attempt" in s and "no comments" in s:
+            continue
+        filtered.append(w)
+    print(f"[LikeComment] Filtered warnings: {len(ws)} -> {len(filtered)} (removed {len(ws) - len(filtered)})")
     return filtered
 
 
@@ -618,9 +790,10 @@ def handle_face_upload(session: Session) -> Dict[str, Any]:
 
 def handle_makeup_creation(session: Session) -> Dict[str, Any]:
     """3. 模拟用户妆造模块."""
-    warnings: list[str] = []
     success_codes = ("0", "200", "success")
-    
+    all_warnings: list[str] = []
+    tried_user_ids: set[int] = set()
+
     def _get_face_id(token: str):
         faces = client.face_list(token)
         items = faces.get("data") or faces.get("list") or faces.get("items") if isinstance(faces, dict) else None
@@ -628,32 +801,49 @@ def handle_makeup_creation(session: Session) -> Dict[str, Any]:
             first = items[0]
             return first.get("id") or first.get("face_model_id")
         return None
-    
-    token, user_id, token_warnings = get_valid_token(session)
-    warnings.extend(token_warnings)
-    
-    if not token:
-        return {"success": False, "warnings": warnings}
-    
-    # 创建可自动刷新 token 的 API 包装器
-    api = TokenRefreshableAPI(session, user_id, token, warnings)
-    
-    # 获取人脸ID：先调用 face_list，如果为空则上传一个人脸
-    try:
-        print(f"[Makeup] ====== Step 1: Getting face list ======")
-        faces = api.call(client.face_list, api_name="face_list")
-        token = api.token  # 获取可能更新后的 token
-        print(f"[Makeup] face_list response: {faces}")
-        
+
+    # 当某用户登录返回 20211 User not found 时，换其他用户重试
+    while True:
+        token, user_id, token_warnings = get_valid_token(session, exclude_user_ids=tried_user_ids)
+        warnings = list(token_warnings)
+        if not token:
+            all_warnings.extend(warnings)
+            return {"success": False, "warnings": all_warnings}
+        tried_user_ids.add(user_id)
+
+        # 创建可自动刷新 token 的 API 包装器
+        api = TokenRefreshableAPI(session, user_id, token, warnings)
+
+        # 获取人脸ID：先调用 face_list，如果为空则上传一个人脸
+        try:
+            print(f"[Makeup] ====== Step 1: Getting face list ======")
+            faces = api.call(client.face_list, api_name="face_list")
+            token = api.token  # 获取可能更新后的 token
+            print(f"[Makeup] face_list response: {faces}")
+        except Exception as face_exc:
+            warnings.append(f"face_list exception: {face_exc}")
+            all_warnings.extend(warnings)
+            if tried_user_ids and ("20211" in str(warnings) or "User not found" in str(warnings)):
+                print(f"[Makeup] User {user_id} failed, trying next user...")
+                continue
+            return {"success": False, "warnings": all_warnings}
+
         # 先检查 face_list 响应是否成功
         ok, code = _check_code(faces, "face_list", warnings, success_codes)
         if not ok:
-            # face_list 调用失败（可能是 token 过期或其他错误）
             error_msg = f"face_list failed with code {code}"
             warnings.append(error_msg)
             print(f"[Makeup] ✗ {error_msg}, response: {faces}")
+            # 若是 10104 且登录返回了 20211/User not found，换下一个用户重试
+            if code == "10104" and ("20211" in str(warnings) or "User not found" in str(warnings)):
+                all_warnings.extend(warnings)
+                print(f"[Makeup] User {user_id} login/refresh failed (20211 or User not found), trying next user...")
+                continue
             return {"success": False, "warnings": warnings, "result": faces}
-        
+        break
+
+    # face_list 已成功，继续后续逻辑（解析 items、face_id、face_save、editor_session 等）
+    try:
         # 解析响应，获取人脸列表
         items = None
         if isinstance(faces, dict):
@@ -1085,6 +1275,40 @@ def handle_post_to_community(session: Session) -> Dict[str, Any]:
             except Exception as db_exc:
                 warnings.append(f"Error updating makeup as posted: {db_exc}")
             
+            # ========== 按概率注入点赞池 ==========
+            try:
+                if post_id:
+                    # 1. 检查今日池子是否已满
+                    now = beijing_now()
+                    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+                    today_count = session.exec(
+                        select(func.count(LikePool.id))
+                        .where(LikePool.published_at >= today_start)
+                    ).one()
+                    
+                    if today_count < LIKE_POOL_DAILY_LIMIT:
+                        # 2. 按概率决定是否注入
+                        if random.random() < LIKE_POOL_INJECT_PROBABILITY:
+                            # 3. 写入池子
+                            new_pool_item = LikePool(
+                                post_id=post_id,
+                                makeup_id=makeup_id,
+                                author_user_id=user_id,  # 使用 makeup_boot.users.id
+                                published_at=now,
+                                like_count=0,
+                            )
+                            session.add(new_pool_item)
+                            print(f"[Post] Injected post {post_id} into like_pool (author_user_id={user_id}, today_count={today_count})")
+                        else:
+                            print(f"[Post] Skipped like_pool injection (probability miss)")
+                    else:
+                        print(f"[Post] Skipped like_pool injection (today_count={today_count} >= {LIKE_POOL_DAILY_LIMIT})")
+            except Exception as pool_exc:
+                # 注入失败不影响主流程
+                warnings.append(f"Error injecting to like_pool: {pool_exc}")
+                print(f"[Post] Error injecting to like_pool: {pool_exc}")
+            # ========== 点赞池注入结束 ==========
+            
             log = UserActivityLog(
                 user_id=user_id,
                 action="post_to_community",
@@ -1095,7 +1319,7 @@ def handle_post_to_community(session: Session) -> Dict[str, Any]:
             )
             session.add(log)
             session.commit()
-            return {"success": True, "user_id": user_id, "result": post_resp, "warnings": warnings}
+            return {"success": True, "user_id": user_id, "post_id": post_id, "result": post_resp, "warnings": warnings}
         else:
             return {"success": False, "warnings": warnings, "result": post_resp}
     except Exception as exc:
@@ -1162,160 +1386,48 @@ def handle_like_collect(session: Session) -> Dict[str, Any]:
                 or makeup_obj.get("makeup_id")
             )
 
-        # 获取100条动态列表（社区动态流）- 使用通用 API 包装器
-        # sort_by=time 按发布时间排序，优先获取最新的
-        print(f"[LikeCollect] Getting community feed (100 items, sort_by=time) to find posts...")
-        feed_params = {"page": 1, "size": 100, "sort_by": "time"}
-        feed_resp = api.call(client.get_community_feed, feed_params, api_name="get_community_feed")
-        token = api.token  # 获取可能更新后的 token
-        print(f"[LikeCollect] feed response: {feed_resp}")
-        ok, code = _check_code(feed_resp, "get_community_feed", warnings, success_codes)
+        # ========== 从点赞池选帖（不再调 get_community_feed）==========
+        print(f"[LikeCollect] Picking posts from like_pool for user {user_id}...")
+        pool_posts = pick_posts_from_pool(session, user_id, count=1)
         
-        if not ok:
-            warnings.append(f"like_collect attempt {attempt} get_community_feed failed: code={code}, user_id={user_id}")
-            last_result = {
-                "error": {
-                    "api": "/api/beauty/community/feed",
-                    "method": "GET",
-                    "params": {"page": 1, "size": 100},
-                    "code": code,
-                    "message": "get_community_feed failed",
-                },
-                "result": feed_resp,
-            }
+        if not pool_posts:
+            warnings.append(f"like_collect attempt {attempt} no available posts in like_pool, user_id={user_id}")
+            last_result = {"error": "No available posts in like_pool"}
             last_user_id = user_id
             continue
         
-        post_id: Optional[int] = None
-        makeup_id: Optional[int] = None
-        selected_item: Any = None
-        selected_item_keys: list[str] = []
+        pool_item = pool_posts[0]
+        post_id: Optional[int] = pool_item.post_id
+        makeup_id: Optional[int] = pool_item.makeup_id
+        selected_item: Any = None  # 兼容后续逻辑
         post_detail: Any = None
-        attempted_post_ids: list[int] = []
         
-        if isinstance(feed_resp, dict):
-            data = feed_resp.get("data") or feed_resp
-            items = data.get("list") or data.get("items") if isinstance(data, dict) else None
-            if not isinstance(items, list) or not items:
-                warnings.append(f"like_collect attempt {attempt} community feed list is empty or invalid, user_id={user_id}")
-                last_result = {
-                    "error": {
-                        "api": "/api/beauty/community/feed",
-                        "method": "GET",
-                        "params": {"page": 1, "size": 100},
-                        "message": "No items in community feed",
-                    },
-                    "result": feed_resp,
-                }
-                last_user_id = user_id
-                continue
-            if isinstance(items, list) and items:
-                print(f"[LikeCollect] Found {len(items)} posts")
-                
-                # 过滤掉自己的动态（通过user_id判断）
-                other_users_items = []
-                for item in items:
-                    item_user_id = item.get("user_id") or item.get("author_id") or item.get("user_id")
-                    # 如果user_id不等于当前用户ID，则保留
-                    if item_user_id != user_id:
-                        other_users_items.append(item)
-                
-                print(f"[LikeCollect] Filtered to {len(other_users_items)} posts from other users (excluding own)")
-                
-                if len(other_users_items) > 0:
-                    # 优先今日发布、其次本周发布，再更早的；同组内随机打乱避免总命中同一条
-                    other_users_items.sort(key=_feed_item_sort_key)
-                    by_priority: Dict[int, list] = {0: [], 1: [], 2: []}
-                    for x in other_users_items:
-                        if not isinstance(x, dict):
-                            continue
-                        p = _feed_item_sort_key(x)[0]
-                        by_priority.setdefault(p, []).append(x)
-                    for p in (0, 1, 2):
-                        random.shuffle(by_priority.get(p, []))
-                    candidates = by_priority.get(0, []) + by_priority.get(1, []) + by_priority.get(2, [])
-                    print(f"[LikeCollect] Priority: today={len(by_priority.get(0, []))}, this_week={len(by_priority.get(1, []))}, older={len(by_priority.get(2, []))}")
-                    max_try = min(10, len(candidates))
-                    for candidate in candidates[:max_try]:
-                        selected_item = candidate
-                        selected_item_keys = list(candidate.keys()) if isinstance(candidate, dict) else []
-                        # feed 返回里常见字段是 post_id（而不是 id），这里优先使用 post_id
-                        post_id = _to_positive_int(candidate.get("post_id") if isinstance(candidate, dict) else None) or _to_positive_int(candidate.get("id") if isinstance(candidate, dict) else None)
-                        if not post_id:
-                            continue
-                        attempted_post_ids.append(post_id)
-
-                        # 先尝试从 feed item 里直接取 makeup_id（有些后端会直接返回）
-                        makeup_id = _extract_makeup_id_from_obj(candidate)
-
-                        # 如果没有 makeup_id，则用 post_id 拉详情获取（严格校验：接口不 ok 直接失败返回）
-                        if not makeup_id:
-                            print(f"[LikeCollect] Trying to get makeup_id from post detail (post_id={post_id})...")
-                            post_detail = api.call(client.get_post_detail, post_id, api_name="get_post_detail")
-                            token = api.token  # 获取可能更新后的 token
-                            print(f"[LikeCollect] post_detail response: {post_detail}")
-                            ok, code = _check_code(post_detail, "get_post_detail", warnings, success_codes)
-                            if not ok:
-                                warnings.append(f"like_collect attempt {attempt} get_post_detail failed: code={code}, user_id={user_id}")
-                                # 继续尝试下一条动态，而不是直接返回
-                                continue
-
-                            if isinstance(post_detail, dict):
-                                detail_data = post_detail.get("data") or post_detail
-                                if isinstance(detail_data, dict):
-                                    makeup_id = _extract_makeup_id_from_obj(detail_data)
-
-                        if makeup_id:
-                            print(f"[LikeCollect] Selected post {post_id}, makeup {makeup_id} from another user")
-                            print(f"[LikeCollect] Selected item keys: {selected_item_keys if selected_item_keys else 'not a dict'}")
-                            print(f"[LikeCollect] Selected item (first 500 chars): {str(selected_item)[:500]}")
-                            break
-                    else:
-                        # 尝试了多条都没有 makeup_id
-                        post_id = attempted_post_ids[-1] if attempted_post_ids else None
-                        makeup_id = None
-                else:
-                    warnings.append(f"like_collect attempt {attempt} no posts from other users found, user_id={user_id}")
-                    last_result = {"error": "No posts from other users found"}
-                    last_user_id = user_id
-                    continue
+        print(f"[LikeCollect] Selected from pool: post_id={post_id}, makeup_id={makeup_id}, author={pool_item.author_user_id}")
+        
+        # 如果池子里没有 makeup_id，从 post_detail 补全
+        if not makeup_id and post_id:
+            print(f"[LikeCollect] No makeup_id in pool, trying get_post_detail...")
+            post_detail = api.call(client.get_post_detail, post_id, api_name="get_post_detail")
+            token = api.token
+            if isinstance(post_detail, dict):
+                detail_data = post_detail.get("data") or post_detail
+                if isinstance(detail_data, dict):
+                    makeup_id = _extract_makeup_id_from_obj(detail_data)
+                    # 更新池子里的 makeup_id
+                    if makeup_id:
+                        pool_item.makeup_id = makeup_id
+                        session.add(pool_item)
+                        print(f"[LikeCollect] Updated pool item with makeup_id={makeup_id}")
         
         if not post_id:
-            warnings.append(f"like_collect attempt {attempt} no post_id found in community feed items, user_id={user_id}")
-            last_result = {
-                "error": {
-                    "api": "/api/beauty/community/feed",
-                    "method": "GET",
-                    "params": {"page": 1, "size": 100},
-                    "message": "No post_id found in selected feed item",
-                },
-                "debug": {
-                    "selected_item_keys": selected_item_keys,
-                    "selected_item_preview": _safe_preview(selected_item),
-                },
-                "result": feed_resp,
-            }
+            warnings.append(f"like_collect attempt {attempt} no post_id from like_pool, user_id={user_id}")
+            last_result = {"error": "No post_id from like_pool"}
             last_user_id = user_id
             continue
         
-        # 注意：上面已在选择阶段尝试从 post detail 获取 makeup_id，这里不再重复调用
-        
         if not makeup_id:
-            warnings.append(f"like_collect attempt {attempt} no makeup_id found for post {post_id}, user_id={user_id}")
-            last_result = {
-                "error": {
-                    "api": "/api/beauty/community/post",
-                    "method": "GET",
-                    "params": {"post_id": post_id},
-                    "message": "No makeup_id found in post detail",
-                },
-                "debug": {
-                    "attempted_post_ids": attempted_post_ids,
-                    "selected_item_keys": selected_item_keys,
-                    "selected_item_preview": _safe_preview(selected_item),
-                    "post_detail_preview": _safe_preview(post_detail),
-                },
-            }
+            warnings.append(f"like_collect attempt {attempt} no makeup_id for post {post_id}, user_id={user_id}")
+            last_result = {"error": f"No makeup_id found for post {post_id}"}
             last_user_id = user_id
             continue
         
@@ -1337,6 +1449,23 @@ def handle_like_collect(session: Session) -> Dict[str, Any]:
                 warnings.append(f"Like post failed with code {code}")
             else:
                 print(f"[LikeCollect] Liked successfully")
+                # ========== 记录已点赞 + 更新池子 like_count ==========
+                try:
+                    # 写入 user_liked_posts
+                    liked_record = UserLikedPost(
+                        user_id=user_id,
+                        post_id=post_id,
+                        liked_at=beijing_now(),
+                    )
+                    session.add(liked_record)
+                    # 更新 like_pool.like_count
+                    pool_item.like_count = (pool_item.like_count or 0) + 1
+                    session.add(pool_item)
+                    print(f"[LikeCollect] Recorded like: user={user_id}, post={post_id}, new_like_count={pool_item.like_count}")
+                except Exception as record_exc:
+                    warnings.append(f"Error recording like: {record_exc}")
+                    print(f"[LikeCollect] Error recording like: {record_exc}")
+                # ========== 记录结束 ==========
         else:
             print(f"[LikeCollect] Already liked, skipping like step")
         
@@ -1373,9 +1502,26 @@ def handle_like_collect(session: Session) -> Dict[str, Any]:
                     if top_level_count >= 5 and isinstance(comment_list, list) and comment_list:
                         roll = random.random()
                         if roll < 0.6:
-                            parent_comment = random.choice(comment_list)
-                            print(f"[LikeCollect] Comment strategy: reply (roll={roll:.2f}, top_level_count={top_level_count})")
-                            print(f"[LikeCollect] Selected parent comment: {parent_comment.get('id')}, content: {parent_comment.get('content', '')[:50]}")
+                            # 优先引用本用户曾点赞过的评论（user_liked_comments 表）
+                            liked_for_post = session.exec(
+                                select(UserLikedComment)
+                                .where(UserLikedComment.user_id == user_id)
+                                .where(UserLikedComment.post_id == post_id)
+                            ).all()
+                            comment_ids_in_list = {c.get("comment_id") or c.get("id") for c in comment_list if isinstance(c, dict)}
+                            from_liked = [r for r in liked_for_post if r.comment_id in comment_ids_in_list]
+                            if from_liked:
+                                ref = random.choice(from_liked)
+                                parent_comment = {
+                                    "id": ref.comment_id,
+                                    "comment_id": ref.comment_id,
+                                    "content": ref.comment_content or "",
+                                }
+                                print(f"[LikeCollect] Comment strategy: reply (quoting liked comment {ref.comment_id})")
+                            else:
+                                parent_comment = random.choice(comment_list)
+                                print(f"[LikeCollect] Comment strategy: reply (roll={roll:.2f}, top_level_count={top_level_count})")
+                            print(f"[LikeCollect] Selected parent comment: {parent_comment.get('id')}, content: {(parent_comment.get('content') or '')[:50]}")
                         else:
                             parent_comment = None
                             print(f"[LikeCollect] Comment strategy: top-level (roll={roll:.2f}, top_level_count={top_level_count})")
@@ -1607,87 +1753,98 @@ def handle_like_comment(session: Session) -> Dict[str, Any]:
             return True
         return False
 
-    def _like_comment_workflow(token: str):
-        """点赞评论的工作流程。"""
-        # 1) 从社区动态里挑一个 post
-        feed_params = {"page": 1, "size": 100}
-        feed_resp = client.get_community_feed(token, feed_params)
+    last_result = None
+    last_user_id: Optional[int] = None
+    
+    # 尝试最多 10 个用户
+    for attempt in range(1, 11):
+        token, user_id, token_warnings = get_valid_token(session)
+        warnings.extend(token_warnings)
+        last_user_id = user_id
         
-        post_id: Optional[int] = None
-        if isinstance(feed_resp, dict):
-            data = feed_resp.get("data") or feed_resp
-            items = data.get("list") or data.get("items") if isinstance(data, dict) else None
-            if isinstance(items, list) and items:
-                random_item = random.choice(items)
-                if isinstance(random_item, dict):
-                    post_id = random_item.get("post_id") or random_item.get("id")
-
-        if not post_id:
-            return {"error": "No post found", "feed_resp": feed_resp}
-
-        # 2) 拉评论列表，挑一条评论点赞
+        if not token:
+            warnings.append(f"like_comment attempt {attempt} no token available")
+            continue
+        
+        # ========== 从点赞池选帖（不再调 get_community_feed）==========
+        print(f"[LikeComment] Picking post from like_pool for user {user_id}...")
+        pool_posts = pick_posts_from_pool(session, user_id, count=1)
+        
+        if not pool_posts:
+            warnings.append(f"like_comment attempt {attempt} no available posts in like_pool, user_id={user_id}")
+            last_result = {"error": "No available posts in like_pool"}
+            continue
+        
+        pool_item = pool_posts[0]
+        post_id = pool_item.post_id
+        print(f"[LikeComment] Selected from pool: post_id={post_id}, author={pool_item.author_user_id}")
+        
+        # 拉评论列表，挑一条评论点赞
+        print(f"[LikeComment] Getting comments for post {post_id}...")
         comments_resp = client.comments(token, {"post_id": post_id, "page": 1, "size": 20})
+        
+        ok_comments, code_comments = _check_code(comments_resp, "get_comments", warnings, success_codes)
+        if not ok_comments:
+            warnings.append(f"like_comment attempt {attempt} comments failed: code={code_comments}, user_id={user_id}")
+            last_result = {"error": f"get_comments failed: {code_comments}"}
+            continue
         
         comment_list = []
         if isinstance(comments_resp, dict):
             data = comments_resp.get("data") or comments_resp
             comment_list = data.get("list") or data.get("items") if isinstance(data, dict) else []
-
-        if not isinstance(comment_list, list) or not comment_list:
-            return {"error": f"No comments found for post {post_id}", "post_id": post_id}
-
-        random_comment = random.choice(comment_list)
+        
         comment_id = None
-        if isinstance(random_comment, dict):
-            comment_id = random_comment.get("comment_id") or random_comment.get("id")
-
+        comment_content: Optional[str] = None
+        if isinstance(comment_list, list) and comment_list:
+            # 有评论：随机选一条点赞，并记下内容便于入库
+            random_comment = random.choice(comment_list)
+            if isinstance(random_comment, dict):
+                comment_id = random_comment.get("comment_id") or random_comment.get("id")
+                comment_content = random_comment.get("content") or random_comment.get("content_text") or random_comment.get("text")
         if not comment_id:
-            return {"error": "No comment_id found", "post_id": post_id}
-
+            # 无评论：先发一条评论，再对这条评论点赞
+            print(f"[LikeComment] No comments for post {post_id}, posting a comment first...")
+            comment_prompt = "Generate a short, natural makeup-related comment in English, within 15 words (e.g. 'Love this look!', 'So pretty'). Just the comment, no quotes."
+            comment_text = generate_text(comment_prompt, max_tokens=40, temperature=0.8).strip().strip('"').strip("'")
+            if not comment_text or len(comment_text) < 2:
+                comment_text = random.choice(["Nice!", "Love it!", "So pretty!", "Great look!", "Amazing ✨"])
+            comment_payload = {"post_id": post_id, "content": comment_text}
+            comment_resp = client.comment(token, comment_payload)
+            ok_post, _ = _check_code(comment_resp, "comment", warnings, success_codes)
+            if not ok_post:
+                warnings.append(f"like_comment attempt {attempt} post comment failed for post {post_id}, user_id={user_id}")
+                last_result = {"error": "Post comment failed"}
+                continue
+            comment_content = comment_text
+            # 从发表评论的响应里取 comment_id
+            data = comment_resp.get("data") if isinstance(comment_resp, dict) else None
+            if isinstance(data, dict):
+                comment_id = data.get("comment_id") or data.get("id")
+            if not comment_id and isinstance(comment_resp, dict):
+                comment_id = comment_resp.get("comment_id") or comment_resp.get("id")
+            if not comment_id:
+                # 发评论成功但没拿到 id，仍视为成功（已发评论）
+                log = UserActivityLog(
+                    user_id=user_id,
+                    action="like_comment",
+                    api_endpoint="/api/beauty/community/comment",
+                    executed_at=beijing_now(),
+                    status="success",
+                    message=f"Posted comment on post {post_id} (no comment_id in response)",
+                )
+                session.add(log)
+                session.commit()
+                return {
+                    "success": True,
+                    "user_id": user_id,
+                    "post_id": post_id,
+                    "comment_id": None,
+                    "warnings": [],  # 成功时不展示「某帖无评论」等中间尝试告警
+                }
+        
+        print(f"[LikeComment] Liking comment {comment_id}...")
         like_resp = client.like_comment(token, {"comment_id": comment_id})
-        
-        return {
-            "feed_resp": feed_resp,
-            "comments_resp": comments_resp,
-            "like_resp": like_resp,
-            "post_id": post_id,
-            "comment_id": comment_id,
-        }
-
-    last_result = None
-    last_user_id: Optional[int] = None
-    # 尝试最多 10 个用户（get_valid_token 内部会随机取可用用户）
-    for attempt in range(1, 11):
-        result, token, user_id, token_warnings = _try_with_token_refresh(session, _like_comment_workflow)
-        warnings.extend(token_warnings)
-        last_result = result
-        last_user_id = user_id
-        
-        if not result:
-            warnings.append(f"like_comment attempt {attempt} no result (user_id={user_id})")
-            continue
-        
-        if isinstance(result, dict) and "error" in result:
-            warnings.append(f"like_comment attempt {attempt} error: {result.get('error')}, user_id={user_id}")
-            continue
-        
-        feed_resp = result.get("feed_resp")
-        comments_resp = result.get("comments_resp")
-        like_resp = result.get("like_resp")
-        post_id = result.get("post_id")
-        comment_id = result.get("comment_id")
-        
-        # 检查各个步骤的响应
-        ok_feed, code_feed = _check_code(feed_resp, "get_community_feed", warnings, success_codes)
-        if not ok_feed:
-            warnings.append(f"like_comment attempt {attempt} feed failed: code={code_feed}, user_id={user_id}")
-            continue
-        
-        ok_comments, code_comments = _check_code(comments_resp, "get_comments", warnings, success_codes)
-        if not ok_comments:
-            warnings.append(f"like_comment attempt {attempt} comments failed: code={code_comments}, user_id={user_id}")
-            continue
-        
         ok_like, code_like = _check_code(like_resp, "like_comment", warnings, success_codes)
         
         # 如果失败但是"已点赞"，视为成功
@@ -1696,6 +1853,25 @@ def handle_like_comment(session: Session) -> Dict[str, Any]:
             ok_like = True
 
         if ok_like:
+            # 记录到 user_liked_comments，便于后续引用（如回复该评论）
+            try:
+                existing = session.exec(
+                    select(UserLikedComment).where(
+                        UserLikedComment.user_id == user_id,
+                        UserLikedComment.comment_id == comment_id,
+                    )
+                ).first()
+                if not existing:
+                    rec = UserLikedComment(
+                        user_id=user_id,
+                        comment_id=comment_id,
+                        post_id=post_id,
+                        comment_content=comment_content,
+                        liked_at=beijing_now(),
+                    )
+                    session.add(rec)
+            except Exception as rec_exc:
+                print(f"[LikeComment] Record UserLikedComment skip: {rec_exc}")
             log = UserActivityLog(
                 user_id=user_id,
                 action="like_comment",
@@ -1711,7 +1887,7 @@ def handle_like_comment(session: Session) -> Dict[str, Any]:
                 "user_id": user_id,
                 "post_id": post_id,
                 "comment_id": comment_id,
-                "warnings": _filter_token_warnings(warnings),
+                "warnings": [],  # 成功时不展示「某帖无评论」等中间尝试告警
             }
         
         warnings.append(f"like_comment attempt {attempt} failed: code={code_like}, user_id={user_id}")
